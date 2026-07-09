@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Firebase Service Account Key - NEVER commit this!
+data/firebase-service-account.json
+
+# FCM Tokens (sensitive device tokens)
+data/fcm-tokens.json
+
+# Data files (orders, products, etc. - stored in Supabase)
+data/*.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary / debug output files
+output.html
+output2.html
+output3.html
+debug_home.html

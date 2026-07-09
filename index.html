@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المتجر</title>
+    <meta name="theme-color" content="#fa0000">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #fa0000;
+            --primary-light: #fa000022;
+            --dark: #0f172a;
+            --gray-100: #f8fafc;
+            --gray-200: #e2e8f0;
+            --gray-400: #94a3b8;
+            --gray-600: #475569;
+            --white: #ffffff;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --radius: 12px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .pulse-badge {
+            position: absolute;
+            top: -2px;
+            right: 5px;
+            width: 10px;
+            height: 10px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        body.reels-mode {
+            overflow: hidden !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            position: fixed !important;
+        }
+    </style>
+    <link rel="stylesheet" href="public/css/store.css?v=2.7">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="db.js"></script>
+    <script src="imgbb.js"></script>
+    <script>
+        window.onerror = function (message, source, lineno, colno, error) {
+            alert("JS Error: " + message + " on line " + lineno + " in " + (source ? source.split('/').pop() : 'unknown'));
+            return false;
+        };
+        window.storePhone = '';
+        window.searchPlaceholders = ['ابحث عن ما تحب...'];
+    </script>
+</head>
+
+<body>
+    <div class="top-bar">
+        <div class="top-bar-announcement">جاري التحميل...</div>
+    </div>
+
+    <header>
+        <div style="flex:1;"></div>
+
+        <a href="javascript:void(0)" id="logoHome" class="logo" style="flex:1; justify-content:center; cursor:pointer;"><i class="fa fa-gem"></i> المتجر</a>
+
+        <div class="nav-icons" style="flex:1; justify-content:flex-end;">
+            <a href="#?app=reels" class="nav-icon-item reels-story-icon" style="position:relative;">
+                <span class="nav-icon-wrapper reels-gradient-bg">
+                    <i class="fa fa-play"></i>
+                </span>
+                <span>ريلز</span>
+                <span id="reels-notification" class="pulse-badge" style="display:none;"></span>
+            </a>
+            <a href="javascript:void(0)" onclick="openModal('searchModal')" class="nav-icon-item">
+                <span class="nav-icon-wrapper">
+                    <i class="fa fa-search"></i>
+                </span>
+                <span>بحث</span>
+            </a>
+            <a href="javascript:void(0)" onclick="openModal('wishlistModal')" class="nav-icon-item">
+                <span class="nav-icon-wrapper">
+                    <i class="fa fa-heart"></i>
+                    <span class="badge" id="fav-count">0</span>
+                </span>
+                <span>المفضلة</span>
+            </a>
+            <a href="javascript:void(0)" onclick="openModal('cartModal')" class="nav-icon-item">
+                <span class="nav-icon-wrapper">
+                    <i class="fa fa-shopping-bag"></i>
+                    <span class="badge" id="cart-count">0</span>
+                </span>
+                <span>السلة</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Sidebar will be rendered by store-init.js -->
+
+        <main class="content-area">
+            <!-- PWA Banner rendered by store-init.js -->
+
+            <!-- Distributor Dashboard (Integrated) -->
+            <div id="distDashboardSection"
+                style="display:none; margin-bottom:40px; background:#fff; border-radius:20px; border:1px solid var(--gray-200); padding:30px; box-shadow:var(--shadow-lg);">
+                <div
+                    style="background: linear-gradient(135deg, var(--primary), var(--dark)); color: white; padding: 40px; border-radius: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+                    <div class="welcome-text">
+                        <h1 id="distWelcomeName" style="font-size: 32px; font-weight: 900; margin-bottom: 10px;">أهلاً
+                            بك، موزعنا الكريم</h1>
+                        <p style="font-size: 16px; opacity: 0.9;">تصفح كتالوج الجملة أو تتبع طلباتك السابقة من مكان
+                            واحد.</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="togglePublicStore(true)" class="btn"
+                            style="background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3); padding:12px 25px; border-radius:12px; font-weight:800; cursor:pointer;"><i
+                                class="fas fa-eye"></i> تصفح المتجر بالكامل</button>
+                        <button onclick="distLogout()" class="btn"
+                            style="background:#ef4444; color:white; border:none; padding:12px 25px; border-radius:12px; font-weight:800; cursor:pointer;"><i
+                                class="fas fa-sign-out-alt"></i> خروج</button>
+                    </div>
+                </div>
+
+                <button id="btnReturnToDash" onclick="togglePublicStore(false)"
+                    style="display:none; position:fixed; bottom:100px; left:30px; z-index:9999; background:var(--primary); color:white; border:none; padding:15px 25px; border-radius:50px; font-weight:800; box-shadow:0 10px 30px rgba(0,0,0,0.3); cursor:pointer; align-items:center; gap:10px;">
+                    <i class="fas fa-arrow-right"></i> العودة للوحة الموزع
+                </button>
+
+                <div
+                    style="display:flex; gap:15px; margin-bottom:30px; background:var(--gray-100); padding:8px; border-radius:15px;">
+                    <button onclick="switchDistSubTab('products')" id="subTabBtnProducts"
+                        style="flex:1; padding:12px; border:none; background:var(--primary); color:white; border-radius:10px; font-weight:800; cursor:pointer; font-family:inherit;"><i
+                            class="fas fa-boxes"></i> كتالوج الجملة</button>
+                    <button onclick="switchDistSubTab('orders')" id="subTabBtnOrders"
+                        style="flex:1; padding:12px; border:none; background:transparent; color:var(--dark); border-radius:10px; font-weight:800; cursor:pointer; font-family:inherit;"><i
+                            class="fas fa-shopping-bag"></i> طلباتي السابقة</button>
+                </div>
+
+                <div id="distSubSecProducts">
+                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:25px;"
+                        id="distWholesaleGrid"></div>
+                </div>
+
+                <div id="distSubSecOrders" style="display:none;">
+                    <div
+                        style="overflow-x:auto; background:#fff; border-radius:15px; border:1px solid var(--gray-200);">
+                        <table style="width:100%; border-collapse:collapse; text-align:right; font-size:14px;">
+                            <thead style="background:var(--gray-100);">
+                                <tr>
+                                    <th style="padding:15px;">رقم الطلب</th>
+                                    <th style="padding:15px;">التاريخ</th>
+                                    <th style="padding:15px;">المنتجات</th>
+                                    <th style="padding:15px;">الإجمالي</th>
+                                    <th style="padding:15px;">الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody id="distMyOrdersTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="publicMarketingContent">
+                <!-- Quick Access Portal Actions -->
+                <div class="content-quick-actions">
+                    <a href="javascript:void(0)" onclick="openModal('ordersModal')" class="quick-action-card">
+                        <div class="quick-action-icon">
+                            <i class="fa fa-truck-ramp-box"></i>
+                        </div>
+                        <div class="quick-action-info">
+                            <h3>تتبع طلبي</h3>
+                            <p>تابع حالة شحنتك وموعد التوصيل مباشرة</p>
+                        </div>
+                        <i class="fa fa-chevron-left quick-action-arrow"></i>
+                    </a>
+                    <a href="javascript:void(0)" onclick="openDistributorPortal()" class="quick-action-card">
+                        <div class="quick-action-icon">
+                            <i class="fa fa-user-tie"></i>
+                        </div>
+                        <div class="quick-action-info">
+                            <h3>بوابة الموزعين</h3>
+                            <p>تفعيل أسعار الجملة وطلب الانضمام كشريك</p>
+                        </div>
+                        <i class="fa fa-chevron-left quick-action-arrow"></i>
+                    </a>
+                </div>
+
+                <!-- Hero Section rendered by store-init.js -->
+                <!-- Products Grid rendered by store-init.js -->
+            </div>
+        </main>
+    </div>
+
+    <footer class="main-footer">
+        <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+            <div class="footer-logo" style="justify-content: center; margin: 0;">
+                <i class="fa fa-gem"></i> المتجر
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                <h4 style="margin: 0; color: var(--gray-600); font-size: 15px; font-weight:800;">تابعنا على مواقع
+                    التواصل</h4>
+                <div class="socials" style="font-size: 20px;">
+                </div>
+            </div>
+
+            <div style="color: var(--gray-400); font-size: 13px; font-weight:700;">
+                جميع الحقوق محفوظة &copy; المتجر
+            </div>
+        </div>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <button id="backToTop" class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+        <i class="fa fa-chevron-up"></i>
+    </button>
+
+    <!-- Mobile Bottom Navigation -->
+    <div class="mobile-bottom-nav">
+        <a href="#" class="active">
+            <i class="fa fa-home"></i>
+            <span>الرئيسية</span>
+        </a>
+        <a href="#?app=reels" class="reels-story-icon">
+            <span class="story-ring-wrapper">
+                <span class="story-ring-avatar"><i class="fa fa-play"></i></span>
+            </span>
+            <span>ريلز</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openModal('cartModal')" class="nav-cart-center">
+            <div class="nav-cart-bubble">
+                <i class="fa fa-shopping-bag"></i>
+                <span class="badge cart-count">0</span>
+            </div>
+            <span>السلة</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openModal('wishlistModal')">
+            <i class="fa fa-heart"></i>
+            <span>المفضلة</span>
+            <span class="badge fav-count">0</span>
+        </a>
+        <a href="javascript:void(0)" onclick="openModal('searchModal')">
+            <i class="fa fa-search"></i>
+            <span>بحث</span>
+        </a>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="searchModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>🔍 بحث ذكي</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('searchModal')"></i>
+            </div>
+            <div class="modal-body">
+                <form style="display:flex; flex-direction:column; gap:15px; position:relative;"
+                    onsubmit="if(!document.getElementById('liveSearchInput').value.trim()) return false;">
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="liveSearchInput" name="q" placeholder="أدخل اسم المنتج للبحث..."
+                            autocomplete="off"
+                            style="flex:1; padding:15px; border:2px solid var(--primary); border-radius:12px; outline:none; font-family:'Tajawal', sans-serif; font-size:16px;"
+                            oninput="handleLiveSearch(this.value)">
+                        <button type="submit"
+                            style="background:var(--primary); color:white; border:none; padding:0 25px; border-radius:12px; cursor:pointer; font-weight:bold; font-size:18px;"><i
+                                class="fa fa-search"></i></button>
+                    </div>
+                    <div id="liveSearchResults"
+                        style="display:none; flex-direction:column; gap:10px; max-height:350px; overflow-y:auto; padding-right:5px;">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let searchDebounceTimeout;
+        async function handleLiveSearch(query) {
+            clearTimeout(searchDebounceTimeout);
+            const resultsDiv = document.getElementById('liveSearchResults');
+
+            if (!query.trim()) {
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+                return;
+            }
+
+            searchDebounceTimeout = setTimeout(async () => {
+                try {
+                    const { data: products } = await DB.supabase.from('products').select('*');
+                    const q = query.toLowerCase();
+                    const matched = (products || []).filter(p => p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q)));
+
+                    if (matched.length > 0) {
+                        resultsDiv.innerHTML = matched.slice(0, 10).map(p => {
+                            const highlightedName = p.name.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<span style="background:var(--primary); color:#fff; padding:0 3px; border-radius:3px;">$1</span>');
+                            return `
+                        <a href="#?product=${p.id}" onclick="closeModal('searchModal')" style="display:flex; gap:15px; align-items:center; padding:10px; border-radius:12px; background:var(--gray-100); text-decoration:none; transition:all 0.3s;" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='var(--gray-100)'">
+                            <img src="${p.image || ''}" style="width:60px; height:60px; object-fit:cover; border-radius:8px;">
+                            <div style="flex:1;">
+                                <div style="color:var(--dark); font-weight:800; font-size:14px; margin-bottom:4px;">${highlightedName}</div>
+                                <div style="color:var(--primary); font-weight:900; font-size:15px;">${window.currency || '₪'}${p.price}</div>
+                            </div>
+                        </a>
+                    `}).join('');
+                        resultsDiv.style.display = 'flex';
+                    } else {
+                        resultsDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--gray-400); font-size:14px;"><i class="fa fa-search" style="font-size:24px; margin-bottom:10px; display:block; opacity:0.5;"></i> لا توجد نتائج مطابقة</div>';
+                        resultsDiv.style.display = 'flex';
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }, 200);
+        }
+    </script>
+
+    <!-- Quick Add Modal -->
+    <div id="quickAddModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>تحديد الخيارات</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('quickAddModal')"></i>
+            </div>
+            <div class="modal-body" id="quickAddBody"></div>
+        </div>
+    </div>
+
+    <!-- Product Detail Page -->
+    <div id="productPage" style="display:none;"></div>
+
+    <!-- Wishlist Modal -->
+    <div id="wishlistModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>❤️ قائمة المفضلة</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('wishlistModal')"></i>
+            </div>
+            <div class="modal-body" id="wishlistBody"></div>
+        </div>
+    </div>
+
+    <!-- Orders Modal -->
+    <div id="ordersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📦 تتبع طلبي</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('ordersModal')"></i>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                    <input type="tel" id="orderPhoneInput" placeholder="أدخل رقم الجوال..."
+                        style="flex:1; padding:12px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    <button onclick="searchOrders()"
+                        style="background:var(--primary); color:white; border:none; padding:0 20px; border-radius:10px; cursor:pointer; font-weight:bold;">بحث</button>
+                </div>
+                <div id="ordersResults">
+                    <p style="text-align:center; color:var(--gray-400); font-size:14px;">أدخل رقم الجوال المرتبط بطلباتك
+                        لعرض حالتها</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cart Modal -->
+    <div id="cartModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>🛒 سلة المشتريات</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('cartModal')"></i>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1: Cart Items -->
+                <div id="cartStepItems">
+                    <div id="cartModalItems" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
+                    <div style="border-top:1px solid var(--gray-200); padding-top:15px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:20px; font-weight:800; font-size:18px;">
+                            <span>إجمالي السلة:</span>
+                            <span id="modalTotalLabel" style="color:var(--primary);">0</span>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="playSfx('click'); closeModal('cartModal')"
+                                style="flex:1; padding:12px; background:var(--gray-100); color:var(--dark); border:none; border-radius:10px; font-weight:700; cursor:pointer;">إضافة
+                                منتجات أخرى</button>
+                            <button onclick="playSfx('click'); showCheckoutForm()"
+                                style="flex:1; padding:12px; background:var(--primary); color:white; border:none; border-radius:10px; font-weight:800; cursor:pointer;">إتمام
+                                الطلب</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Shipping Details -->
+                <div id="cartStepCheckout" style="display:none;">
+                    <button onclick="playSfx('click'); backToCart()"
+                        style="background:none; border:none; color:var(--primary); font-weight:700; cursor:pointer; margin-bottom:15px; display:flex; align-items:center; gap:5px;"><i
+                            class="fa fa-arrow-right"></i> العودة للسلة</button>
+                    <h4 style="margin-bottom:20px; font-weight:800; font-size:18px;">تفاصيل الشحن والاستلام</h4>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                        <input type="text" id="custName" placeholder="الاسم الكامل" required
+                            style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200);">
+                        <input type="text" id="custCityName" placeholder="اسم المدينة / القرية" required
+                            style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200); outline:none;">
+                    </div>
+
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:12px; font-weight:800; margin-bottom:8px; color:var(--text-muted);">منطقة
+                            التوصيل:</label>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+                            <label class="region-select-label">
+                                <input type="radio" name="custRegion" value="الضفة" checked
+                                    onchange="updateShippingByRegion(this.value)">
+                                <span>الضفة</span>
+                            </label>
+                            <label class="region-select-label">
+                                <input type="radio" name="custRegion" value="القدس"
+                                    onchange="updateShippingByRegion(this.value)">
+                                <span>القدس</span>
+                            </label>
+                            <label class="region-select-label">
+                                <input type="radio" name="custRegion" value="الداخل"
+                                    onchange="updateShippingByRegion(this.value)">
+                                <span>الداخل</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <style>
+                        .region-select-label {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            padding: 10px;
+                            background: #fff;
+                            border: 2px solid var(--gray-200);
+                            border-radius: 10px;
+                            cursor: pointer;
+                            font-weight: 700;
+                            font-size: 14px;
+                            transition: 0.2s;
+                        }
+                        .region-select-label input { display: none; }
+                        .region-select-label:has(input:checked) {
+                            border-color: var(--primary);
+                            background: var(--primary-light);
+                            color: var(--primary);
+                        }
+                    </style>
+
+                    <input type="text" id="custAddress" placeholder="العنوان بالتفصيل (الحي، الشارع، معلم قريب)"
+                        required
+                        style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200); margin-bottom:10px;">
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:5px;">
+                        <div style="position:relative;">
+                            <input type="tel" id="custPhone" placeholder="رقم الهاتف 1" required
+                                style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200); transition: all 0.3s ease;">
+                            <div id="phone-validation-msg"
+                                style="display:none; position:absolute; top:100%; right:0; left:0; background:#fee2e2; color:#b91c1c; padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; margin-top:5px; z-index:10; border:1px solid #fecaca; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+                                <i class="fas fa-exclamation-circle"></i> يرجى إدخال 10 أرقام (مثلاً: 059xxxxxxx)
+                            </div>
+                        </div>
+                        <input type="tel" id="custPhone2" placeholder="رقم الهاتف 2 (اختياري)"
+                            style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200);">
+                    </div>
+                    <div style="height:25px;"></div>
+
+                    <textarea id="custNotes" placeholder="ملاحظات الطلب (مثال: يرجى التوصيل بعد الساعة 5 مساءً)"
+                        rows="3"
+                        style="width:100%; padding:12px; border-radius:10px; border:1px solid var(--gray-200); margin-bottom:20px; outline:none; font-family:inherit; resize:vertical;"></textarea>
+
+                    <button onclick="playSfx('click'); showPaymentStep()"
+                        style="width:100%; padding:15px; background:var(--primary); color:white; border:none; border-radius:12px; font-weight:800; font-size:18px; cursor:pointer;">المتابعة
+                        للدفع <i class="fa fa-chevron-left"></i></button>
+                </div>
+
+                <!-- Step 3: Payment & Discount -->
+                <div id="cartStepPayment" style="display:none;">
+                    <button onclick="playSfx('click'); backToCheckout()"
+                        style="background:none; border:none; color:var(--primary); font-weight:700; cursor:pointer; margin-bottom:15px; display:flex; align-items:center; gap:5px;"><i
+                            class="fa fa-arrow-right"></i> العودة للشحن</button>
+                    <h4 style="margin-bottom:20px; font-weight:800; font-size:18px;">طريقة الدفع والكوبون</h4>
+
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:800; margin-bottom:10px;">هل لديك كود
+                            خصم؟</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" id="couponInput" placeholder="أدخل الكوبون هنا..."
+                                style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--gray-200); font-weight:700; transition: all 0.3s ease;">
+                            <button id="couponBtn" onclick="applyCoupon()"
+                                style="padding:10px 20px; background:var(--dark); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:700; transition: all 0.3s ease;">تطبيق</button>
+                        </div>
+                        <div id="couponFeedback"
+                            style="margin-top:8px; font-size:12px; display:none; align-items:center; justify-content:space-between; font-weight:700; color:#10b981; background:#e6f4ea; padding:8px 12px; border-radius:8px;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:25px;">
+                        <label style="display:block; font-size:12px; font-weight:800; margin-bottom:10px;">اختر طريقة
+                            الدفع:</label>
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <label
+                                style="display:flex; align-items:center; gap:10px; background:var(--gray-100); padding:15px; border-radius:10px; border:2px solid var(--primary); cursor:pointer;">
+                                <input type="radio" name="paymentMethod" value="cod" checked
+                                    style="accent-color:var(--primary);">
+                                <div style="flex:1;">
+                                    <span style="display:block; font-weight:800;">الدفع عند الاستلام (COD)</span>
+                                    <small
+                                        style="display:block; font-size:11px; color:var(--gray-600); margin-top:2px;">ببساطة
+                                        نقوم بايصال المنتج لغاية منزلك وتقوم بدفع الثمن لموظف التوصيل.</small>
+                                </div>
+                                <i class="fa fa-money-bill-wave" style="color:#10b981; font-size:20px;"></i>
+                            </label>
+                            <label
+                                style="display:flex; align-items:center; gap:10px; background:var(--gray-50); padding:15px; border-radius:10px; border:1px solid var(--gray-200); opacity:0.6; cursor:not-allowed;">
+                                <input type="radio" name="paymentMethod" value="visa" disabled>
+                                <span>البطاقة الائتمانية (قريباً)</span>
+                                <i class="fa fa-credit-card" style="margin-right:auto;"></i>
+                            </label>
+                        </div>
+                    </div>
+
+                    <form onsubmit="return finalizeCartCheckout(event)">
+                        <input type="hidden" name="cartData" id="modalCartData">
+                        <input type="hidden" name="total" id="modalCartTotal">
+                        <input type="hidden" name="shippingCost" id="modalShippingCost">
+                        <input type="hidden" name="discount" id="modalDiscount">
+                        <input type="hidden" name="couponCode" id="modalCouponCode">
+                        <input type="hidden" name="customerName" id="finalName">
+                        <input type="hidden" name="customerCity" id="finalCity">
+                        <input type="hidden" name="customerAddress" id="finalAddress">
+                        <input type="hidden" name="customerPhone" id="finalPhone">
+                        <input type="hidden" name="customerPhone2" id="finalPhone2">
+                        <input type="hidden" name="notes" id="finalNotes">
+
+                        <div style="background:var(--gray-100); padding:20px; border-radius:15px; margin-bottom:20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                                <span>المجموع:</span>
+                                <span id="subTotalLabel">0</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                                <span>التوصيل:</span>
+                                <span id="shippingTotalLabel">0</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:#10b981; display:none;"
+                                id="discountRow">
+                                <span>الخصم:</span>
+                                <span id="discountLabel">0-</span>
+                            </div>
+                            <div
+                                style="display:flex; justify-content:space-between; font-weight:900; font-size:20px; border-top:1px solid var(--gray-200); padding-top:10px;">
+                                <span>الإجمالي النهائي:</span>
+                                <span id="finalTotalLabel" style="color:var(--primary);">0</span>
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                            style="width:100%; padding:15px; background:var(--primary); color:white; border:none; border-radius:12px; font-weight:800; font-size:18px; cursor:pointer; box-shadow:0 10px 20px rgba(0,0,0,0.1);">تأكيد
+                            الطلب النهائي</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Cart Bar -->
+    <div id="floatingCartBar" class="floating-cart-bar" onclick="openModal('cartModal')">
+        <i class="fa fa-shopping-bag"></i>
+        <span class="cart-text"><span id="floatingCartCount">0</span> منتجات في سلتك (<span
+                id="floatingCartTotal">0.00</span> ₪)</span>
+        <span class="checkout-link">إتمام الطلب <i class="fa fa-chevron-left"></i></span>
+    </div>
+
+    <!-- Distributor Modal -->
+    <div id="distributorModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3><i class="fa fa-users" style="color:var(--primary);"></i> بوابة الموزعين وتجار الجملة</h3>
+                <i class="fa fa-times close-modal" onclick="closeModal('distributorModal')"></i>
+            </div>
+            <div class="modal-body" id="distAuthSection">
+                <div
+                    style="display:flex; gap:10px; margin-bottom:20px; background:var(--gray-100); padding:5px; border-radius:12px;">
+                    <button id="distLoginTabBtn"
+                        style="flex:1; padding:10px; border:none; background:var(--white); border-radius:8px; font-weight:800; box-shadow:var(--shadow-sm); cursor:pointer;"
+                        onclick="switchDistTab('login')">تسجيل الدخول</button>
+                    <button id="distRegTabBtn"
+                        style="flex:1; padding:10px; border:none; background:transparent; border-radius:8px; font-weight:800; cursor:pointer;"
+                        onclick="switchDistTab('register')">طلب انضمام</button>
+                </div>
+
+                <div id="distLoginForm">
+                    <p style="font-size:13px; color:var(--gray-600); margin-bottom:20px;">قم بتسجيل الدخول برقم هاتفك
+                        لعرض أسعار الجملة المخصصة لك.</p>
+                    <div id="distLoginErrorMsg"
+                        style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-size:13px; font-weight:700; margin-bottom:15px; text-align:center;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">رقم الهاتف
+                            المسجل</label>
+                        <input type="tel" id="distLoginPhone" dir="ltr" placeholder="05XXXXXXXX"
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">كلمة
+                            المرور</label>
+                        <input type="password" id="distLoginPassword" dir="ltr" placeholder="********"
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none; margin-bottom:8px;">
+                        <a href="javascript:void(0)" onclick="forgotDistPassword()"
+                            style="font-size:12px; font-weight:700; color:var(--primary); text-decoration:none; display:inline-block;">هل
+                            نسيت كلمة المرور؟</a>
+                    </div>
+                    <button onclick="distLogin()"
+                        style="width:100%; padding:14px; background:var(--primary); color:white; border:none; border-radius:10px; font-weight:800; font-size:16px; cursor:pointer;">دخول
+                        للمنصة</button>
+                </div>
+
+                <div id="distPendingUi" style="display:none; text-align:center; padding: 20px 0;">
+                    <div
+                        style="width:70px; height:70px; background:#fef9c3; color:#ca8a04; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 20px;">
+                        <i class="fa fa-clock-rotate-left"></i>
+                    </div>
+                    <h3 style="margin-bottom:10px; color:#ca8a04;">طلبك قيد المراجعة</h3>
+                    <p style="color:var(--gray-600); font-size:14px; line-height:1.6; margin-bottom:20px;">حسابك حالياً
+                        قيد المراجعة من قبل الإدارة. يرجى الانتظار لحين الموافقة عليه لتتمكن من رؤية أسعار الجملة.</p>
+                    <button onclick="switchDistTab('login')"
+                        style="padding:10px 20px; background:var(--gray-200); color:var(--dark); border:none; border-radius:8px; font-weight:700; cursor:pointer;">رجوع</button>
+                </div>
+
+                <div id="distRegForm" style="display:none;">
+                    <div id="distRegErrorMsg"
+                        style="display:none; background:#fee2e2; color:#b91c1c; padding:10px; border-radius:8px; font-size:13px; font-weight:700; margin-bottom:15px; text-align:center;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">الاسم الكامل
+                            *</label>
+                        <input type="text" id="distRegName"
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">رقم الهاتف
+                            *</label>
+                        <input type="tel" id="distRegPhone" dir="ltr" placeholder="05XXXXXXXX"
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">كلمة المرور
+                            *</label>
+                        <input type="password" id="distRegPassword" dir="ltr" placeholder="********"
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">المدينة
+                            *</label>
+                        <input type="text" id="distRegCity" placeholder="أدخل اسم المدينة..."
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">العنوان
+                            بالتفصيل *</label>
+                        <input type="text" id="distRegAddress" placeholder="الشارع، المعلم القريب..."
+                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                    </div>
+                    <button onclick="distRegister()"
+                        style="width:100%; padding:14px; background:var(--dark); color:white; border:none; border-radius:10px; font-weight:800; font-size:16px; cursor:pointer;">إرسال
+                        طلب الانضمام</button>
+                </div>
+
+                <div id="distRegSuccess" style="display:none; text-align:center; padding: 20px 0;">
+                    <div
+                        style="width:70px; height:70px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 20px;">
+                        <i class="fa fa-check"></i>
+                    </div>
+                    <h3 style="margin-bottom:10px; color:#16a34a;">تم إرسال طلبك بنجاح!</h3>
+                    <p style="color:var(--gray-600); font-size:14px; line-height:1.6; margin-bottom:20px;">لقد استلمنا
+                        طلب انضمامك لبرنامج الموزعين. سيتم مراجعته من قبل الإدارة وسنقوم بالتواصل معك قريباً لتفعيل
+                        حسابك.</p>
+                    <button onclick="switchDistTab('login')"
+                        style="padding:10px 20px; background:var(--gray-200); color:var(--dark); border:none; border-radius:8px; font-weight:700; cursor:pointer;">العودة
+                        لتسجيل الدخول</button>
+                </div>
+            </div>
+
+            <div class="modal-body" id="distProfileSection" style="display:none; text-align:center;">
+                <div
+                    style="width:60px; height:60px; background:var(--primary-light); color:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 15px;">
+                    <i class="fa fa-user-tie"></i>
+                </div>
+                <h2 style="margin-bottom:5px;" id="distProfileName">أهلاً بك</h2>
+                <p style="color:var(--primary); font-weight:800; margin-bottom:20px;">حساب موزّع مفوض (أسعار جملة)</p>
+
+                <div
+                    style="background:var(--gray-100); padding:15px; border-radius:12px; font-size:13px; text-align:right; margin-bottom:20px;">
+                    أنت الآن تتصفح المتجر بأسعار الجملة المخصصة للموزعين. سيتم تطبيق الخصومات تلقائياً في السلة.
+                </div>
+
+                <a href="javascript:void(0)" onclick="closeModal('distributorModal'); togglePublicStore(false);"
+                    class="btn-primary"
+                    style="display:block; width:100%; text-decoration:none; padding:14px; border-radius:10px; font-weight:800; margin-bottom:10px; font-size:16px;">
+                    <i class="fas fa-th-large"></i> عرض منتجات الجملة وطلباتي
+                </a>
+
+                <button onclick="distLogout()"
+                    style="width:100%; padding:14px; background:#fef2f2; color:#f43f5e; border:1px solid #fee2e2; border-radius:10px; font-weight:800; font-size:14px; cursor:pointer;">
+                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categories Modal (Mobile Bottom Sheet) -->
+    <div id="categoriesModal" class="modal">
+        <div class="cats-sheet">
+            <div class="cats-sheet-handle"></div>
+
+            <div class="cats-sheet-header">
+                <div class="cats-sheet-title">
+                    <i class="fa fa-th-large"></i>
+                    <span>تصفح الأقسام</span>
+                </div>
+                <button class="cats-sheet-close" onclick="closeModal('categoriesModal')">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+
+            <div class="cats-sheet-body">
+                <a href="#" onclick="closeModal('categoriesModal')" class="cats-all-link">
+                    <span><i class="fa fa-border-all"></i> جميع المنتجات</span>
+                    <i class="fa fa-chevron-left cats-chevron-icon"></i>
+                </a>
+
+                <div class="cats-section-label">الأقسام</div>
+                <div class="cats-mobile-list"></div>
+
+                <div class="cats-section-label" style="margin-top:20px;">العلامات التجارية</div>
+                <div class="cats-brands-grid"></div>
+
+                <div class="cats-section-label" style="margin-top:20px;">روابط مفيدة</div>
+                <div class="cats-pages-list"></div>
+
+                <div style="height: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        #categoriesModal { align-items: flex-end; }
+        .cats-sheet { width: 100%; max-width: 540px; margin: 0 auto; background: #fff; border-radius: 24px 24px 0 0; display: flex; flex-direction: column; max-height: 82vh; transform: translateY(100%); transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1); box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15); overflow: hidden; }
+        #categoriesModal.active .cats-sheet { transform: translateY(0); }
+        .cats-sheet-handle { width: 44px; height: 5px; background: var(--gray-200); border-radius: 10px; margin: 14px auto 6px; flex-shrink: 0; }
+        .cats-sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px 14px; border-bottom: 1px solid var(--gray-100); flex-shrink: 0; }
+        .cats-sheet-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; color: var(--dark); }
+        .cats-sheet-title i { color: var(--primary); font-size: 18px; }
+        .cats-sheet-close { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--gray-100); color: #6b7280; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px; transition: background 0.2s; }
+        .cats-sheet-close:hover { background: var(--gray-200); }
+        .cats-sheet-body { flex: 1; overflow-y: auto; padding: 16px 16px 0; -webkit-overflow-scrolling: touch; }
+        .cats-all-link { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: linear-gradient(135deg, var(--primary-light), #fff8f0); border-radius: 14px; color: var(--primary); font-weight: 800; font-size: 14px; text-decoration: none; margin-bottom: 16px; border: 1.5px solid var(--primary-light); transition: all 0.2s; }
+        .cats-all-link:active { background: var(--primary-light); transform: scale(0.98); }
+        .cats-chevron-icon { font-size: 11px; opacity: 0.5; }
+        .cats-section-label { font-size: 11px; font-weight: 900; color: var(--gray-400); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; padding-right: 4px; }
+        .cats-mobile-list { display: flex; flex-direction: column; gap: 4px; }
+        #categoriesModal .cat-group { position: relative; border-radius: 12px; overflow: visible; margin-bottom: 0; }
+        #categoriesModal .cat-group:hover, #categoriesModal .cat-group:has(.active) { background: transparent; }
+        #categoriesModal .cat-group>.cat-item { display: flex !important; align-items: center; justify-content: space-between; width: 100%; padding: 12px 14px !important; border-radius: 12px !important; background: var(--gray-100); color: var(--dark); text-decoration: none; font-weight: 700; font-size: 14px; transition: all 0.2s ease; box-sizing: border-box; border: 1.5px solid transparent; }
+        #categoriesModal .cat-group>.cat-item:active { background: var(--primary-light); border-color: var(--primary-light); color: var(--primary); }
+        #categoriesModal .cat-group>.cat-item.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary) !important; }
+        #categoriesModal .subcat-wrapper { position: static !important; opacity: 1 !important; visibility: visible !important; transform: none !important; box-shadow: none !important; border: none !important; background: transparent !important; width: 100% !important; padding: 6px 0 6px 12px !important; display: flex; flex-direction: column; gap: 3px; }
+        #categoriesModal .subcat-sidebar-list { gap: 3px; }
+        #categoriesModal .subcat-sidebar-list .cat-item { display: flex !important; align-items: center; gap: 8px; padding: 10px 12px !important; border-radius: 10px !important; background: transparent; color: #4b5563; font-size: 13px !important; font-weight: 600; text-decoration: none; transition: all 0.2s ease; border-right: 2px solid var(--gray-200); }
+        #categoriesModal .subcat-sidebar-list .cat-item:active { background: var(--primary-light); color: var(--primary); border-right-color: var(--primary); }
+        .cats-brands-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+        .cats-brands-grid .cat-item, .cats-brands-grid .cat-group>.cat-item { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; padding: 12px 8px !important; background: var(--gray-100) !important; border-radius: 14px !important; border: 1.5px solid transparent !important; gap: 8px !important; text-align: center !important; font-size: 11px !important; font-weight: 700 !important; color: var(--dark) !important; text-decoration: none !important; transition: all 0.2s !important; }
+        .cats-brands-grid .cat-item:active { transform: scale(0.95) !important; border-color: var(--primary) !important; background: var(--primary-light) !important; color: var(--primary) !important; }
+        .cats-brands-grid .cat-item img { width: 42px !important; height: 42px !important; border-radius: 10px !important; object-fit: cover !important; }
+        .cats-brands-grid .subcat-wrapper { display: none !important; }
+        .cats-pages-list { display: flex; flex-direction: column; gap: 8px; }
+        .cats-pages-list a { padding: 13px 16px; background: var(--gray-100); border-radius: 12px; color: var(--dark); font-weight: 700; font-size: 13px; text-decoration: none; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+        .cats-pages-list a:active { background: var(--gray-200); }
+        .cats-pages-list a::after { content: '\f053'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 10px; opacity: 0.3; }
+        .brand-modal-item { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 8px; background: var(--gray-100); border-radius: 14px; border: 1.5px solid transparent; gap: 8px; text-align: center; font-size: 11px; font-weight: 700; color: var(--dark); text-decoration: none; transition: all 0.2s; }
+        .brand-modal-item:active, .brand-modal-item.active { transform: scale(0.95); border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+        .modal-section-title { font-size: 13px; font-weight: 800; color: var(--gray-400); margin-bottom: 15px; }
+        #categoriesModal.active .modal-content { transform: translateY(0) !important; }
+    </style>
+
+    <div id="globalToast" class="toast">
+        <i class="fa fa-check-circle"></i>
+        <span>جاري العملية...</span>
+    </div>
+
+    <div id="newReelFloatingToast" class="new-reel-floating-toast" style="display:none;">
+        <div class="toast-content">
+            <span class="toast-icon">🎥</span>
+            <div class="toast-text">
+                <strong>فيديو جديد متاح! ⭐</strong>
+                <span>شاهد أحدث ريلز متوفرة الآن</span>
+            </div>
+        </div>
+        <a href="#?app=reels" class="toast-btn">شاهد الآن</a>
+        <button class="toast-close" onclick="dismissNewReelToast(event)">&times;</button>
+    </div>
+
+    <!-- Firebase SDK for Push Notifications -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
+
+    <script src="cart.js"></script>
+    <script src="store-init.js"></script>
+    <script src="store.js"></script>
+</body>
+
+</html>
