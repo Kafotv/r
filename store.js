@@ -327,6 +327,10 @@
             document.getElementById('cartStepCheckout').style.display = 'block';
             document.getElementById('cartStepPayment').style.display = 'none';
         }
+        window.showPaymentStep = function showPaymentStep() {
+            document.getElementById('cartStepCheckout').style.display = 'none';
+            document.getElementById('cartStepPayment').style.display = 'block';
+        }
 
         function updateShippingByRegion(region) { recalculateCartTotals(); }
 
@@ -552,7 +556,7 @@
                 };
 
                 const result = await DB.createOrder(orderData);
-                if (result && result.id) {
+                if (result) {
                     playSuccessSound();
                     launchConfetti();
                     if (typeof window.trackStoreEvent === 'function') {
@@ -580,7 +584,7 @@
                             <h3 style="font-weight:900;margin-bottom:10px;font-size:22px;color:var(--dark);">تم استلام طلبك بنجاح! 🎉</h3>
                             <p style="color:#64748b;font-size:14px;margin-bottom:20px;line-height:1.6;">سنقوم بالتواصل معك قريباً لتأكيد الطلب وترتيب عملية التوصيل.</p>
                             <div style="background:#f8fafc;padding:15px;border-radius:12px;margin-bottom:20px;border:1px solid #e2e8f0;text-align:right;">
-                                <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;color:#64748b;"><span>رقم الطلب:</span><strong style="color:var(--dark);font-family:monospace;">${result.id}</strong></div>
+                                <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;color:#64748b;"><span>رقم الطلب:</span><strong style="color:var(--dark);font-family:monospace;">${result}</strong></div>
                                 <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;"><span>المبلغ الإجمالي:</span><strong style="color:var(--primary);font-size:16px;font-weight:800;">${finalTotalVal} ₪</strong></div>
                             </div>
                             <a href="${whatsappLink}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:#25d366;color:white;border:none;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer;text-decoration:none;margin-bottom:20px;box-shadow:0 6px 15px rgba(37,211,102,0.25);"><i class="fab fa-whatsapp" style="font-size:20px;"></i> تواصل عبر الواتساب 💬</a>

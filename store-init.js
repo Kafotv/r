@@ -73,6 +73,14 @@ window.StoreInit = {
         });
       }
 
+      // PWA Install Prompt
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        this.deferredPrompt = e;
+        const banner = document.getElementById('pwaInstallBanner');
+        if (banner) banner.style.display = 'flex';
+      });
+
       // Handle deep links (#?product=ID / #?cat=ID)
       this._handleHash();
 
@@ -478,6 +486,21 @@ window.StoreInit = {
 
   // ── WhatsApp Bubble ─────────────────────────────────────────────────────────
 
+  _installPWA() {
+    if (this.deferredPrompt) {
+      this.deferredPrompt.prompt();
+      this.deferredPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        }
+        this.deferredPrompt = null;
+        const banner = document.getElementById('pwaInstallBanner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
+  },
+
+  // ── WhatsApp Bubble ─────────────────────────────────────────────────────────
   _renderWhatsAppBubble() {
     if (this.settings.showWhatsappBubble === 'false' || !this.settings.whatsappUrl) return;
     const bubble = document.createElement('a');
@@ -1130,9 +1153,19 @@ window.StoreInit = {
         return list.length ? `<div style="margin:30px 0;">${sectionHeader(s.title || 'منتجات موصى بها ⭐', 'fas fa-star')}${viewAllLink('all', 'عرض الكل')}${gridOf(list)}</div>` : '';
       }
       case 'category_products': {
-        let list = s.categoryId ? visibleProducts.filter(p => (p.categories || []).includes(s.categoryId)) : [];
+        if (!s.categoryId) return '';
+        let list;
+        if (s.categoryId === 'all') {
+          list = visibleProducts.filter(p => !this._isComingSoon(p));
+        } else {
+          list = visibleProducts.filter(p => {
+            const cats = Array.isArray(p.categories) ? p.categories : (p.category ? [String(p.category)] : []);
+            return cats.map(String).includes(String(s.categoryId));
+          });
+        }
         if (s.limit) list = list.slice(0, s.limit);
-        return list.length ? `<div style="margin:30px 0;">${sectionHeader(s.title || 'منتجات القسم', 'fas fa-boxes')}${gridOf(list)}</div>` : '';
+        if (!list.length) return `<div style="margin:30px 0;">${sectionHeader(s.title || 'منتجات القسم', 'fas fa-boxes')}<div style="text-align:center;padding:30px;color:var(--gray-400);"><i class="fas fa-box-open" style="font-size:36px;margin-bottom:10px;opacity:0.3;"></i><p style="font-weight:700;">لا توجد منتجات في هذا القسم حالياً</p></div></div>`;
+        return `<div style="margin:30px 0;">${sectionHeader(s.title || 'منتجات القسم', 'fas fa-boxes')}${viewAllLink(s.categoryId, 'عرض الكل')}${gridOf(list)}</div>`;
       }
       case 'winning_product': {
         const p = visibleProducts.find(x => String(x.id) === String(s.productId));
@@ -1162,10 +1195,12 @@ window.StoreInit = {
         return `<div style="margin:30px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:15px;">${items.map(it => `<div style="background:#fff;border:1px solid var(--gray-200);border-radius:16px;padding:20px;text-align:center;"><i class="fas ${it.icon || 'fa-check'}" style="font-size:26px;color:${s.iconColor || 'var(--primary)'};"></i><div style="font-weight:800;margin-top:10px;">${it.title || it.text || ''}</div>${it.desc ? `<div style="font-size:12px;color:var(--gray-600);margin-top:4px;">${it.desc}</div>` : ''}</div>`).join('')}</div>`;
       case 'category_tabs': {
         const catIds = s.categoryIds || [];
-        let list = visibleProducts.filter(p => (p.categories || []).some(c => catIds.includes(c)));
+        let list = visibleProducts.filter(p => {
+          const cats = Array.isArray(p.categories) ? p.categories : (p.category ? [String(p.category)] : []);
+          return cats.map(String).some(c => catIds.map(String).includes(c));
+        });
         if (s.limit) list = list.slice(0, s.limit);
         return `<div style="margin:30px 0;">${sectionHeader(s.title || 'أقسامنا', 'fas fa-tags')}${gridOf(list)}</div>`;
-      return `<div style="margin:30px 0;">${sectionHeader(s.title || 'أقسامنا', 'fas fa-tags')}${gridOf(list)}</div>`;
       }
       case 'logo_marquee': {
         const logos = s.logos || [];

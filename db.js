@@ -44,6 +44,7 @@ const DB = (() => {
     fakeVisitors: 'fake_visitors', fakeStock: 'fake_stock',
     fakeTimer: 'fake_timer', isLandingPage: 'is_landing_page',
     landingSections: 'landing_sections', variantsData: 'variants_data',
+    advanced: 'advanced',
     createdAt: 'created_at'
   };
   const CATEGORY_MAP = {
@@ -57,7 +58,10 @@ const DB = (() => {
     sessionCount: 'session_count', firstVisit: 'first_visit',
     ipCountry: 'ip_country', isWholesale: 'is_wholesale',
     distributorId: 'distributor_id', stockSubtracted: 'stock_subtracted',
-    createdAt: 'created_at', updatedAt: 'updated_at'
+    createdAt: 'created_at', updatedAt: 'updated_at',
+    customer: 'customer', items: 'items', total: 'total',
+    discount: 'discount', status: 'status', notes: 'notes',
+    referrer: 'referrer'
   };
   const COUPON_MAP = {
     minOrder: 'min_order', maxUses: 'max_uses', usedCount: 'used_count',
@@ -240,8 +244,13 @@ const DB = (() => {
       row.id = String(row.id || 'ORD-' + Date.now());
       if (!row.date) row.date = new Date().toISOString();
       const { error } = await sb().from('orders').upsert(row, { onConflict: 'id' });
-      if (error) { console.error('saveOrder:', error); return false; }
-      return true;
+      if (error) { console.error('saveOrder:', error); return null; }
+      return row.id;
+    },
+
+    // Alias for compatibility
+    async createOrder(order) {
+      return this.saveOrder(order);
     },
 
     async updateOrder(id, updates) {

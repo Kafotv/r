@@ -89,6 +89,7 @@
                 handleReelDeepLinking();
             }
             if (targetId === 'tab-products') renderProductsTable();
+            if (targetId === 'tab-orders') renderOrdersTable();
 
             if(updateUrl) {
                 const newUrl = new URL(window.location);
@@ -507,15 +508,42 @@
 
             // 1. Check for Low Stock (less than 5)
             const lowStockProducts = products.filter(p => {
-                const stock = parseInt(p.stock);
-                return !isNaN(stock) && stock > 0 && stock < 5;
+                // Stock is in variants_data or advanced JSONB
+                let stock = 0;
+                if (p.variants_data && Array.isArray(p.variants_data) && p.variants_data.length) {
+                    stock = p.variants_data.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
+                } else if (p.advanced && typeof p.advanced.stock === 'number') {
+                    stock = p.advanced.stock;
+                } else if (p.variants && Array.isArray(p.variants)) {
+                    // Check if variants have stock in their values
+                    stock = p.variants.reduce((sum, v) => {
+                        if (v.values && Array.isArray(v.values)) {
+                            return sum + v.values.reduce((s, val) => s + (parseInt(val.stock) || 0), 0);
+                        }
+                        return sum;
+                    }, 0);
+                }
+                return stock > 0 && stock < 5;
             });
             lowStockProducts.forEach(p => {
+                let stock = 0;
+                if (p.variants_data && Array.isArray(p.variants_data) && p.variants_data.length) {
+                    stock = p.variants_data.reduce((sum, v) => sum + (parseInt(v.stock) || 0), 0);
+                } else if (p.advanced && typeof p.advanced.stock === 'number') {
+                    stock = p.advanced.stock;
+                } else if (p.variants && Array.isArray(p.variants)) {
+                    stock = p.variants.reduce((sum, v) => {
+                        if (v.values && Array.isArray(v.values)) {
+                            return sum + v.values.reduce((s, val) => s + (parseInt(val.stock) || 0), 0);
+                        }
+                        return sum;
+                    }, 0);
+                }
                 notifications.push({
                     icon: 'fa-exclamation-triangle',
                     color: '#f59e0b',
                     title: `مخزون منخفض: ${p.name}`,
-                    time: `المتبقي: ${p.stock}`,
+                    time: `المتبقي: ${stock}`,
                     action: `switchTab('tab-products')`
                 });
             });
@@ -1889,6 +1917,47 @@
                         </td>
                     </tr>
                 `;
+}).join('');
+        }
+        
+        // --- Orders Table Rendering ---
+        function renderOrdersTable() {
+            const tbody = document.getElementById('ordersTableBody') || document.querySelector('#ordersTable tbody');
+            if (!tbody) return;
+            
+            const orders = window.storeOrdersData || [];
+            if (!orders.length) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);">لا توجد طلبات بعد</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = orders.map((o, index) => {
+                const date = new Date(o.date || o.createdAt).toLocaleDateString('ar-EG');
+                const status = o.status || 'جديد';
+                const statusColors = {
+                    'مكتمل': { bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
+                    'جديد': { bg: '#fffbeb', color: '#92400e', border: '#fef3c7' },
+                    'قيد التوصيل': { bg: '#eff6ff', color: '#1e40af', border: '#bfdbfe' },
+                    'ملغي': { bg: '#fef2f2', color: '#991b1b', border: '#fecaca' }
+                };
+                const sc = statusColors[status] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
+                const items = (o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ');
+                
+                return `
+                    <tr data-id="${o.id}">
+                        <td style="text-align:center;">${index + 1}</td>
+                        <td>${o.customer?.name || o.customerName || '—'}</td>
+                        <td dir="ltr">${o.customer?.phone || o.customerPhone || '—'}</td>
+                        <td>${(o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ')}</td>
+                        <td dir="ltr" style="font-weight:700;color:var(--primary);">${parseFloat(o.total).toFixed(2)} ₪</td>
+                        <td style="text-align:center;">
+                            <span style="background:${sc.bg};color:${sc.color};border:1px solid ${sc.border};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;">${status}</span>
+                        </td>
+                        <td style="font-size:11px;opacity:0.7;">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
+                        <td style="text-align:center;">
+                            <button class="btn btn-outline" onclick="viewOrder('${o.id}')" style="padding:5px 12px;font-size:11px;border-radius:8px;font-weight:700;background:var(--white);border:1px solid var(--border);color:var(--primary);cursor:pointer;" title="التفاصيل"><i class="fas fa-eye"></i></button>
+                        </td>
+                    </tr>`;
             }).join('');
         }
         function loadWholesalePricesUI() {
