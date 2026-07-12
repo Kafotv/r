@@ -151,14 +151,33 @@ const DB = (() => {
     async saveProduct(product) {
       const row = toRow(product, PRODUCT_MAP);
       row.id = String(row.id || Date.now());
-      // comingSoonDate belongs inside the advanced JSONB column, not as a top-level column
-      if ('comingSoonDate' in row) {
-        row.advanced = row.advanced || {};
-        if (row.comingSoonDate) row.advanced.comingSoonDate = row.comingSoonDate;
-        delete row.comingSoonDate;
-      }
-      if (row.advanced === undefined) row.advanced = {};
+      
+      if (row.advanced === undefined || row.advanced === null) row.advanced = {};
       if (typeof row.advanced !== 'object') row.advanced = {};
+
+      // Move UI/advanced fields to advanced JSONB column
+      const advancedKeys = ['stock', 'comingSoonDate', 'isComingSoon', 'isRecommended'];
+      advancedKeys.forEach(k => {
+        if (k in row) {
+          row.advanced[k] = row[k];
+          delete row[k];
+        }
+      });
+
+      // Filter out any other keys not present in the database table schema
+      const dbColumns = [
+        'id', 'name', 'price', 'sale_price', 'wholesale_price', 'cost_price',
+        'sku', 'image', 'images', 'description', 'categories', 'category',
+        'admin_note', 'fake_visitors', 'fake_stock', 'fake_timer',
+        'is_landing_page', 'landing_sections', 'variants', 'variants_data',
+        'advanced', 'created_at'
+      ];
+      Object.keys(row).forEach(k => {
+        if (!dbColumns.includes(k)) {
+          delete row[k];
+        }
+      });
+
       // Numeric columns must be numbers or null (Postgres rejects empty strings)
       ['price', 'sale_price', 'wholesale_price', 'cost_price'].forEach(col => {
         if (col in row) {
