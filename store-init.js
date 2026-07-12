@@ -9,6 +9,16 @@ window.StoreInit = {
   products: [],
 
   async init() {
+    // Clean URL from index.html and empty hash when running on the web
+    if (window.location.protocol !== 'file:') {
+      if (window.location.pathname.endsWith('/index.html')) {
+        const cleanPath = window.location.pathname.replace(/\/index\.html$/, '/');
+        window.history.replaceState(null, '', cleanPath + window.location.search + window.location.hash);
+      }
+      if (window.location.hash === '#') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
     try {
       // Store content is hidden via CSS by default. Show it only when no page/reels URL.
       const pageInQuery = window.location.search.match(/[?&]page=([^&#]+)/);
