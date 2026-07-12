@@ -782,16 +782,11 @@
                 const adminPass = String(adminPassRow?.value || '').replace(/"/g,'');
                 if (adminPhone && phone === adminPhone && password === adminPass) {
                     localStorage.setItem('admin_logged', 'true');
-                    localStorage.setItem('distributorPhone', phone);
-                    // Try to load distributor data if exists
-                    const { data: distributors } = await DB.supabase.from('distributors').select('*').eq('phone', phone);
-                    const dist = distributors && distributors[0];
-                    if (dist) {
-                        localStorage.setItem('distributorName', dist.name);
-                        localStorage.setItem('distributorId', dist.id);
-                        localStorage.setItem('distributorCity', dist.city || '');
-                        localStorage.setItem('distributorAddress', dist.address || '');
-                    }
+                    localStorage.removeItem('distributorPhone');
+                    localStorage.removeItem('distributorName');
+                    localStorage.removeItem('distributorId');
+                    localStorage.removeItem('distributorCity');
+                    localStorage.removeItem('distributorAddress');
                     if (typeof closeModal === 'function') closeModal('distributorModal');
                     showAdminDashboard();
                     updateProfileDropdown();
