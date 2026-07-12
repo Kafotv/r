@@ -4,6 +4,16 @@
 // Open this file in browser after setting up tables
 // ============================================
 
+let supabase;
+if (typeof window === 'undefined') {
+  const { createClient } = require('@supabase/supabase-js');
+  const SUPABASE_URL = 'https://psoatzqqzdknrzslhvvt.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzb2F0enFxemRrbnJ6c2xodnZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1OTg4NTYsImV4cCI6MjA5OTE3NDg1Nn0.p98fbmfHp7tnYq5qChH3UVbZ_rHIw21kpFaknemhGPs';
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+  supabase = window.supabase;
+}
+
 async function migrateData() {
   console.log('🚀 Starting data migration to Supabase...');
 

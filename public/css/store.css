@@ -49,13 +49,12 @@ a {
 
 /* Top Bar */
 .top-bar {
-    background: linear-gradient(135deg, var(--dark) 0%, #1e293b 100%);
+    background: var(--dark);
     color: var(--white);
-    padding: 10px 5%;
-    font-size: 13px;
+    padding: 8px 5%;
+    font-size: 12px;
     font-weight: 700;
-    border-bottom: 2px solid var(--primary);
-    box-shadow: var(--shadow-sm);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
     z-index: 1001;
     position: relative;
     display: flex;
@@ -86,16 +85,16 @@ a {
 
 header {
     background: var(--white);
-    padding: 15px 5%;
+    padding: 12px 5%;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-100);
     position: sticky;
     top: 0;
     z-index: 1000;
-    box-shadow: var(--shadow-sm);
-    gap: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    gap: 15px;
 }
 
 .logo {
@@ -214,9 +213,9 @@ header {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     background: var(--gray-100);
     color: var(--gray-600);
     margin-bottom: 4px;
@@ -674,6 +673,47 @@ header {
     }
 }
 
+.main-container.no-sidebar .product-grid {
+    grid-template-columns: repeat(7, 1fr);
+}
+
+@media (max-width: 1400px) {
+    .main-container.no-sidebar .product-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+@media (max-width: 1024px) {
+    .main-container.no-sidebar .product-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .main-container.no-sidebar .product-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+}
+
+
+.cat-section-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .cat-section-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+    }
+}
+
+.main-container.no-sidebar .cat-section-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
 .product-card {
     background: var(--white);
     border-radius: var(--radius);
@@ -765,28 +805,34 @@ header {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #f43f5e;
+    color: #94a3b8;
     cursor: pointer;
     box-shadow: var(--shadow-md);
     z-index: 10;
     transition: var(--transition);
     font-size: 14px;
 }
+.fav-btn i {
+    color: #94a3b8;
+}
 
 .fav-btn:hover {
-    background: #f43f5e;
-    color: var(--white);
+    background: var(--primary-light);
+    color: var(--primary);
     transform: scale(1.1);
 }
 
 .fav-btn.active {
-    background: #f43f5e;
-    color: var(--white);
+    background: #ffffff !important;
+    color: var(--primary) !important;
+}
+.fav-btn.active i {
+    color: var(--primary) !important;
 }
 
 .arr-sl-fav.active,
 .rec-sl-fav.active {
-    background: #f43f5e !important;
+    background: var(--primary) !important;
     color: #fff !important;
 }
 
@@ -1546,8 +1592,9 @@ header {
 /* Toast Notification */
 .toast {
     position: fixed;
-    bottom: 30px;
-    left: 30px;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-150%);
     background: var(--dark);
     color: white;
     padding: 12px 25px;
@@ -1557,7 +1604,6 @@ header {
     gap: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     z-index: 12000;
-    transform: translateX(-150%);
     transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     will-change: transform;
     font-weight: 700;
@@ -1565,7 +1611,7 @@ header {
 }
 
 .toast.visible {
-    transform: translateX(0);
+    transform: translateX(-50%) translateY(0);
 }
 
 .toast i {
@@ -1668,7 +1714,18 @@ header {
     }
 
     .floating-cart-bar {
-        display: none !important;
+        bottom: 70px;
+        left: 16px;
+        right: 16px;
+        width: auto;
+        transform: translateX(0) translateY(100px);
+        border-radius: 14px;
+        padding: 12px 18px;
+        font-size: 13px;
+        z-index: 9998;
+    }
+    .floating-cart-bar.visible {
+        transform: translateX(0) translateY(0);
     }
 
     body {

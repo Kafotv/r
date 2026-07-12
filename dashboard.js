@@ -80,10 +80,15 @@
             if (targetId === 'tab-coupons') loadCoupons();
             if (targetId === 'tab-marketing-notifications') loadNotifications();
             if (targetId === 'tab-distributors') loadDistributors();
+            if (targetId === 'tab-distributor-detail' && !window._currentDistDetail) {
+                const body = document.getElementById('distDetailBody');
+                if (body) body.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-hand-pointer" style="font-size:48px;opacity:0.3;display:block;margin-bottom:15px;"></i><p style="font-weight:700;font-size:16px;">يرجى اختيار موزع من القائمة</p><button class="btn btn-primary" onclick="switchTab(\'tab-distributors\')" style="margin-top:10px;"><i class="fas fa-arrow-right"></i> العودة لقائمة الموزعين</button></div>';
+            }
             if (targetId === 'tab-distributors-orders') loadDistributorOrders();
             if (targetId === 'tab-wholesale-prices') loadWholesalePricesUI();
             if (targetId === 'tab-pages') loadPagesList();
             if (targetId === 'tab-popups') initPopupsManager();
+            if (targetId === 'tab-shipping' && typeof renderShippingRegions === 'function') renderShippingRegions(window._storeSettings);
             if (targetId === 'tab-reels') {
                 showReelsList(false);
                 handleReelDeepLinking();
@@ -104,7 +109,11 @@
                 newUrl.searchParams.delete('editCoupon');
                 newUrl.searchParams.delete('editNotif');
                 
-                window.history.pushState({}, '', newUrl);
+                try {
+                    window.history.pushState({}, '', newUrl);
+                } catch (e) {
+                    console.warn('History pushState blocked (normal on file:// protocol):', e);
+                }
                 if(activeLink) document.title = `${activeLink.innerText.trim()} | لوحة التحكم`;
             }
             const contentArea = document.querySelector('.content-area');
@@ -125,27 +134,87 @@
                 const tab = params.get('tab');
                 if (tab) switchTab('tab-' + tab, false);
 
+                // Handle distributor detail deep link with distId
+                const distId = params.get('distId');
+                if (tab === 'distributor-detail' && distId) {
+                    // Defer until distributors are loaded, then show detail
+                    const tryLoadDist = async () => {
+                        try {
+                            const dists = await DB.getDistributors();
+                            const dist = dists.find(d => String(d.id) === String(distId));
+                            if (dist) {
+                                showDistributorDetail(dist);
+                            } else {
+                                document.getElementById('distDetailBody').innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-exclamation-triangle" style="font-size:48px;opacity:0.3;display:block;margin-bottom:15px;"></i><p style="font-weight:700;font-size:16px;">لم يتم العثور على الموزع</p></div>';
+                            }
+                        } catch(e) {
+                            console.error('Failed to load distributor by ID:', e);
+                        }
+                    };
+                    tryLoadDist();
+                }
+
                 allProducts = await DB.getProducts();
-                
-                // Render products table in the products tab
-                renderProductsTable();
-                
                 allCategories = await DB.getCategories();
+                window.allCategories = allCategories;
+                window._allCats = allCategories;
+                
+                // Render products table after categories are loaded
+                renderProductsTable();
                 if (typeof loadCategories === 'function') loadCategories();
 
                 // Load home sections from settings
                 try {
                     const settings = await DB.getSettings();
+                    window._storeSettings = settings;
+                    const safeParse = (v) => {
+                        if (!v || typeof v !== 'string') return v;
+                        try { return JSON.parse(v); } catch (e) { console.warn('Invalid JSON in settings value:', e); return null; }
+                    };
                     if (settings.home_sections_json) {
-                        const parsed = typeof settings.home_sections_json === 'string' ? JSON.parse(settings.home_sections_json) : settings.home_sections_json;
-                        window.homeSections = parsed;
-                        homeSections = parsed;
+                        const parsed = safeParse(settings.home_sections_json);
+                        if (parsed) { window.homeSections = parsed; homeSections = parsed; }
                     }
                     if (settings.slider_json) {
-                        const parsed = typeof settings.slider_json === 'string' ? JSON.parse(settings.slider_json) : settings.slider_json;
-                        window.activeSlides = parsed;
+                        const parsed = safeParse(settings.slider_json);
+                        if (parsed) window.activeSlides = parsed;
                     }
                     if (typeof renderHomeSections === 'function') renderHomeSections();
+
+                    if (settings.sidebar_sections_json) {
+                        const parsed = safeParse(settings.sidebar_sections_json);
+                        if (parsed) window.sidebarSections = parsed;
+                    }
+                    if (typeof renderSidebarSections === 'function') renderSidebarSections();
+
+                    // Populate other settings form fields dynamically from database
+                    document.querySelectorAll('form[action*="save_settings"]').forEach(form => {
+                        form.querySelectorAll('input, textarea, select').forEach(input => {
+                            if (!input.name) return;
+                            let val = settings[input.name];
+                            // Handle popups_json → popups mapping
+                            if (val === undefined && input.name === 'popups_json') {
+                                val = settings.popups;
+                            }
+                            if (val === undefined) return;
+                            
+                            if (input.type === 'checkbox') {
+                                input.checked = (val === true || val === 'true');
+                            } else if (input.type === 'radio') {
+                                input.checked = String(input.value) === String(val);
+                            } else {
+                                // If value is an object/array (already parsed JSON from Supabase),
+                                // stringify it before setting on the form field
+                                input.value = typeof val === 'object' ? JSON.stringify(val) : val;
+                            }
+                        });
+                    });
+                    // Re-init popup manager after settings are loaded (for popups tab)
+                    if (document.getElementById('popups_json_input') && typeof initPopupsManager === 'function') {
+                        initPopupsManager();
+                    }
+                    // Render saved shipping regions (if any)
+                    if (typeof renderShippingRegions === 'function') renderShippingRegions(settings);
                 } catch(e) { console.error('Error loading settings:', e); }
 
                 if (params.get('action') === 'add_product') openAddModal();
@@ -236,13 +305,67 @@
         // Initialize dashboard & FCM on load
         window.addEventListener('DOMContentLoaded', async () => {
             await initDashboard();
-            await initAdminFCM();
-            loadAdvancedStats(); // Load stats on start
-            loadAbandonedCarts(); // جلب الطلبات المفقودة عند تحميل الصفحة
+            initAdminFCM();
+            loadAdvancedStats().catch(e => { console.error('Initial stats load failed, retrying...', e); setTimeout(loadAdvancedStats, 500); });
+            loadAbandonedCarts();
+            initDistributorNotifier();
         });
+
+        function initDistributorNotifier() {
+            // Show pending count badge on sidebar
+            async function updateBadge() {
+                try {
+                    const dists = await DB.getDistributors();
+                    const pending = dists.filter(d => d.status === 'pending').length;
+                    let badge = document.getElementById('distPendingBadge');
+                    if (!badge) {
+                        const link = document.querySelector('.sub-item[data-target="tab-distributors"]');
+                        if (!link) return;
+                        badge = document.createElement('span');
+                        badge.id = 'distPendingBadge';
+                        badge.style.cssText = 'background:#ef4444; color:#fff; font-size:10px; padding:1px 7px; border-radius:50px; margin-right:5px; font-weight:800;';
+                        link.appendChild(badge);
+                    }
+                    badge.textContent = pending;
+                    badge.style.display = pending > 0 ? 'inline' : 'none';
+                } catch(e) {}
+            }
+            updateBadge();
+            setInterval(updateBadge, 30000);
+
+            // Refresh bell dropdown with current distributor notifs
+            async function refreshBell() {
+                const notifs = [];
+                await _appendDistributorNotifs(notifs);
+                if (notifs.length > 0) {
+                    const existing = document.querySelectorAll('.notif-item');
+                    if (!existing.length || !document.querySelector('.notif-item [class*="fa-user-plus"]')) {
+                        _updateNotifUI(notifs);
+                    }
+                }
+            }
+
+            // Real-time subscription for new registrations
+            try {
+                const channel = DB.supabase
+                    .channel('distributors-insert')
+                    .on('postgres_changes',
+                        { event: 'INSERT', schema: 'public', table: 'distributors' },
+                        (payload) => {
+                            const d = payload.new;
+                            showToast(`🆕 طلب انضمام جديد من ${d.name || d.phone}`);
+                            playDistributorSound();
+                            updateBadge();
+                            refreshBell();
+                        }
+                    )
+                    .subscribe();
+            } catch(e) { console.warn('Realtime not available:', e.message); }
+        }
 
         let statsChart = null;
         async function loadAdvancedStats() {
+            console.log('[STATS] loadAdvancedStats called');
             const btn = document.querySelector('button[onclick="loadAdvancedStats()"]');
             const originalContent = btn ? btn.innerHTML : '';
             
@@ -256,9 +379,12 @@
                     btn.innerHTML = '<i class="fas fa-sync-alt fa-spin" style="margin-left: 8px;"></i> جاري التحديث...';
                 }
 
+                console.log('[STATS] Fetching analytics stats...');
                 const statsData = await DB.getAnalyticsStats();
+                console.log('[STATS] statsData:', statsData);
                 
                 const allOrdersRaw = await DB.getOrders();
+                console.log('[STATS] orders count:', allOrdersRaw.length);
                 window.storeOrdersData = allOrdersRaw;
 
                 const history = statsData.history || [];
@@ -285,16 +411,16 @@
                 }
 
                 // Calculate Totals for CRO
-                const visits = filteredHistory.reduce((s, h) => s + (h.visit || 0), 0);
+                const visits = filteredHistory.reduce((s, h) => s + (h.visits || h.visit || 0), 0);
                 const carts = filteredHistory.reduce((s, h) => s + (h.add_to_cart || 0), 0);
                 const checkouts = filteredHistory.reduce((s, h) => s + (h.init_checkout || 0), 0);
                 const ordersCount = filteredOrders.length;
 
                 // 1. Update Super Stats Cards (Always All Time or Today based on summary)
                 document.getElementById('stat-today-revenue').innerText = `₪${parseFloat(summary.todayRevenue || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-                document.getElementById('stat-total-orders-count').innerText = summary.totalOrders.toLocaleString() || 0;
+                document.getElementById('stat-total-orders-count').innerText = (summary.totalOrders || 0).toLocaleString();
                 document.getElementById('stat-aov').innerText = `₪${parseFloat(summary.avgOrderValue || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-                document.getElementById('stat-active-visitors').innerText = summary.totalVisits.toLocaleString() || 0;
+                document.getElementById('stat-active-visitors').innerText = (summary.totalVisits || 0).toLocaleString();
 
                 // 2. Render CRO Grid Dynamically
                 const grid = document.getElementById('cro-metrics-grid');
@@ -385,21 +511,21 @@
                 if(document.getElementById('target-success-val')) document.getElementById('target-success-val').value = savedSettings.targets.success;
 
                 // 3. Daily Boxes
-                const todayData = history[history.length - 1] || { visit: 0, orders: 0, revenue: 0 };
-                const yesterdayData = history[history.length - 2] || { visit: 0, orders: 0, revenue: 0 };
+                const todayData = history[history.length - 1] || { visits: 0, visit: 0, orders: 0, revenue: 0 };
+                const yesterdayData = history[history.length - 2] || { visits: 0, visit: 0, orders: 0, revenue: 0 };
                 const calcTrend = (nowVal, prevVal) => {
                     if (prevVal === 0) return nowVal > 0 ? '+100%' : '0%';
                     const diff = ((nowVal - prevVal) / prevVal) * 100;
                     return (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
                 };
-                document.getElementById('box-today-visits').innerText = todayData.visit.toLocaleString();
-                document.getElementById('box-visits-trend').innerText = `${calcTrend(todayData.visit, yesterdayData.visit)} منذ الأمس`;
+                document.getElementById('box-today-visits').innerText = (todayData.visits || todayData.visit || 0).toLocaleString();
+                document.getElementById('box-visits-trend').innerText = `${calcTrend(todayData.visits || todayData.visit || 0, yesterdayData.visits || yesterdayData.visit || 0)} منذ الأمس`;
                 document.getElementById('box-today-orders').innerText = todayData.orders.toLocaleString();
                 document.getElementById('box-orders-trend').innerText = `${calcTrend(todayData.orders, yesterdayData.orders)} منذ الأمس`;
                 document.getElementById('box-today-revenue').innerText = `₪${parseFloat(summary.todayRevenue || 0).toLocaleString()}`;
 
                 // 4. Funnel Boxes (Always 7 days for the funnel visuals)
-                const funnelVisits = filteredHistory.reduce((s, h) => s + (h.visit || 0), 0) || 1;
+                const funnelVisits = filteredHistory.reduce((s, h) => s + (h.visits || h.visit || 0), 0) || 1;
                 document.getElementById('funnel-box-visits').innerText = funnelVisits.toLocaleString();
                 document.getElementById('funnel-box-cart').innerText = carts.toLocaleString();
                 document.getElementById('funnel-box-cart-rate').innerText = `${((carts / funnelVisits) * 100).toFixed(1)}% من الزوار`;
@@ -499,7 +625,45 @@
             loadAdvancedStats(); // Reload to apply changes
         }
 
-        function updateDynamicNotifications(orders, products) {
+        async function _appendDistributorNotifs(notifications) {
+            try {
+                const dists = await DB.getDistributors();
+                const pending = dists.filter(d => d.status === 'pending');
+                pending.forEach(d => {
+                    notifications.push({
+                        icon: 'fa-user-plus',
+                        color: '#10b981',
+                        title: `طلب انضمام جديد: ${d.name || d.phone}`,
+                        time: new Date(d.createdAt).toLocaleDateString('ar-EG'),
+                        action: `switchTab('tab-distributors')`
+                    });
+                });
+            } catch(e) {}
+        }
+
+        function _updateNotifUI(notifications) {
+            const notifBody = document.querySelector('.notif-body');
+            const notifBadge = document.querySelector('.notif-badge');
+            if (!notifBody) return;
+            if (notifications.length > 0) {
+                notifBadge.style.display = 'block';
+                notifBadge.innerText = notifications.length;
+                notifBody.innerHTML = notifications.map(n => `
+                    <div class="notif-item unread" onclick="${n.action}">
+                        <i class="fas ${n.icon}" style="color: ${n.color};"></i>
+                        <div class="notif-text">
+                            <p>${n.title}</p>
+                            <span>${n.time}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                notifBadge.style.display = 'none';
+                notifBody.innerHTML = '<p style="text-align:center; padding:30px; color:#94a3b8; font-size:12px;">لا توجد تنبيهات جديدة</p>';
+            }
+        }
+
+        async function updateDynamicNotifications(orders, products) {
             const notifBody = document.querySelector('.notif-body');
             const notifBadge = document.querySelector('.notif-badge');
             if (!notifBody) return;
@@ -564,23 +728,10 @@
                 });
             });
 
-            // Update UI
-            if (notifications.length > 0) {
-                notifBadge.style.display = 'block';
-                notifBadge.innerText = notifications.length;
-                notifBody.innerHTML = notifications.map(n => `
-                    <div class="notif-item unread" onclick="${n.action}">
-                        <i class="fas ${n.icon}" style="color: ${n.color};"></i>
-                        <div class="notif-text">
-                            <p>${n.title}</p>
-                            <span>${n.time}</span>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                notifBadge.style.display = 'none';
-                notifBody.innerHTML = '<p style="text-align:center; padding:30px; color:#94a3b8; font-size:12px;">لا توجد تنبيهات جديدة</p>';
-            }
+            // 3. Check for pending distributor registrations
+            await _appendDistributorNotifs(notifications);
+
+            _updateNotifUI(notifications);
         }
 
         function renderStatsChart(history) {
@@ -590,7 +741,7 @@
             if (statsChart) statsChart.destroy();
 
             const labels = history.map(h => h.date);
-            const visitData = history.map(h => h.visit);
+            const visitData = history.map(h => h.visits);
             const orderData = history.map(h => h.orders);
 
             statsChart = new Chart(ctx, {
@@ -864,6 +1015,7 @@
                     'badges': 'عشارات مميزات المتجر 360°',
                     'logo_marquee': 'شريط شعارات متحرك 🖼️',
                     'static_features': 'مميزات المتجر (ثابتة) ✅',
+                    'categories': 'التصنيفات 🏷️',
                     'hero_slider': 'البنر الرئيسي (Hero Section) 🚀'
                 };
                 const typeIcons = {
@@ -883,6 +1035,7 @@
                     'badges': 'fas fa-certificate',
                     'logo_marquee': 'fas fa-images',
                     'static_features': 'fas fa-check-double',
+                    'categories': 'fas fa-folder-tree',
                     'hero_slider': 'fas fa-rocket'
                 };
 
@@ -1405,6 +1558,62 @@
                             <i class="fas fa-plus"></i> إضافة ميزة جديدة
                         </button>
                     `;
+                } else if (section.type === 'categories') {
+                    const catStyle = section.catStyle || 'grid';
+                    const selectedCatIds = section.categoryIds || [];
+                    const catsForCheckbox = (allCategories && allCategories.length) ? allCategories : (window._allCats || []);
+                    if (!catsForCheckbox.length && typeof DB !== 'undefined' && DB.getCategories) {
+                        DB.getCategories().then(c => { window._allCats = c; if (typeof renderHomeSections === 'function') renderHomeSections(); });
+                    }
+                    const catCheckboxes = catsForCheckbox.map(c => `
+                        <label style="display:inline-flex; align-items:center; gap:6px; margin: 4px 10px 4px 0; font-size:12px; font-family:'Tajawal', sans-serif; cursor:pointer;">
+                            <input type="checkbox" value="${c.id}" ${selectedCatIds.includes(c.id) ? 'checked' : ''} 
+                                onchange="
+                                    let ids = homeSections[${index}].categoryIds || [];
+                                    if(this.checked) {
+                                        if(!ids.includes(this.value)) ids.push(this.value);
+                                    } else {
+                                        ids = ids.filter(id => id !== this.value);
+                                    }
+                                    homeSections[${index}].categoryIds = ids;
+                                    serializeHomeSections();
+                                ">
+                            <span>${c.name}</span>
+                        </label>
+                    `).join('');
+                    sectionContent = `
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label class="label-luxury" style="font-size:12px;">عنوان القسم</label>
+                            <input type="text" value="${section.title || 'التصنيفات 🏷️'}" class="input-luxury" style="padding:10px; font-size:13px; margin-bottom:0;" oninput="homeSections[${index}].title=this.value; serializeHomeSections();">
+                        </div>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label class="label-luxury" style="font-size:12px;">شكل عرض التصنيفات</label>
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">
+                                <label style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px; border:2px solid ${catStyle === 'grid' ? 'var(--primary)' : '#e2e8f0'}; border-radius:12px; cursor:pointer; background:${catStyle === 'grid' ? '#f5f3ff' : '#fff'};" onclick="homeSections[${index}].catStyle='grid'; renderHomeSections(); serializeHomeSections();">
+                                    <i class="fas fa-th-large" style="font-size:22px; color:${catStyle === 'grid' ? 'var(--primary)' : '#94a3b8'};"></i>
+                                    <span style="font-size:10px; font-weight:700; color:${catStyle === 'grid' ? 'var(--primary)' : '#64748b'};">شبكة</span>
+                                </label>
+                                <label style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px; border:2px solid ${catStyle === 'list' ? 'var(--primary)' : '#e2e8f0'}; border-radius:12px; cursor:pointer; background:${catStyle === 'list' ? '#f5f3ff' : '#fff'};" onclick="homeSections[${index}].catStyle='list'; renderHomeSections(); serializeHomeSections();">
+                                    <i class="fas fa-list" style="font-size:22px; color:${catStyle === 'list' ? 'var(--primary)' : '#94a3b8'};"></i>
+                                    <span style="font-size:10px; font-weight:700; color:${catStyle === 'list' ? 'var(--primary)' : '#64748b'};">قائمة</span>
+                                </label>
+                                <label style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px; border:2px solid ${catStyle === 'circles' ? 'var(--primary)' : '#e2e8f0'}; border-radius:12px; cursor:pointer; background:${catStyle === 'circles' ? '#f5f3ff' : '#fff'};" onclick="homeSections[${index}].catStyle='circles'; renderHomeSections(); serializeHomeSections();">
+                                    <i class="fas fa-circle" style="font-size:22px; color:${catStyle === 'circles' ? 'var(--primary)' : '#94a3b8'};"></i>
+                                    <span style="font-size:10px; font-weight:700; color:${catStyle === 'circles' ? 'var(--primary)' : '#64748b'};">دوائر</span>
+                                </label>
+                                <label style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px; border:2px solid ${catStyle === 'boxes' ? 'var(--primary)' : '#e2e8f0'}; border-radius:12px; cursor:pointer; background:${catStyle === 'boxes' ? '#f5f3ff' : '#fff'};" onclick="homeSections[${index}].catStyle='boxes'; renderHomeSections(); serializeHomeSections();">
+                                    <i class="fas fa-th" style="font-size:22px; color:${catStyle === 'boxes' ? 'var(--primary)' : '#94a3b8'};"></i>
+                                    <span style="font-size:10px; font-weight:700; color:${catStyle === 'boxes' ? 'var(--primary)' : '#64748b'};">بطاقات</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="label-luxury" style="font-size:12px;">اختر التصنيفات للعرض (اتركها فارغة لعرض الكل)</label>
+                            <div style="max-height:150px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:10px; background:#fff; display:flex; flex-wrap:wrap; gap:10px;">
+                                ${catCheckboxes || '<span style="font-size:12px; color:var(--text-muted);">لا توجد تصنيفات متوفرة</span>'}
+                            </div>
+                        </div>
+                    `;
                 } else if (section.type === 'hero_slider') {
                     const slides = section.slides || [];
                     const displayType = section.heroType || 'slider';
@@ -1623,6 +1832,10 @@
                     { icon: 'fa-shield-heart', title: 'ضمان الجودة', desc: 'منتجات أصلية 100%' },
                     { icon: 'fa-rotate', title: 'تبديل سهل', desc: 'خلال 14 يوم' }
                 ];
+            } else if (type === 'categories') {
+                newSec.title = 'التصنيفات 🏷️';
+                newSec.catStyle = 'grid';
+                newSec.categoryIds = [];
             } else if (type === 'hero_slider') {
                 newSec.slides = [
                     { image: '', title: '', link: '' }
@@ -1891,9 +2104,35 @@
                 const isComingSoon = p.advanced && p.advanced.isComingSoon;
                 const isHidden = p.advanced && p.advanced.hiddenProduct;
                 const variantsCount = (p.variants || []).length;
+                const stock = p.advanced && p.advanced.stock !== undefined && p.advanced.stock !== '' ? p.advanced.stock : '';
+                let stockDisplay = '';
+                let stockBg = '';
+                let stockColor = '';
+                if (stock === '') {
+                    stockDisplay = '∞';
+                    stockBg = '#f0fdf4';
+                    stockColor = '#166534';
+                } else if (stock === 0) {
+                    stockDisplay = '0';
+                    stockBg = '#fef2f2';
+                    stockColor = '#dc2626';
+                } else if (stock <= 5) {
+                    stockDisplay = String(stock);
+                    stockBg = '#fef2f2';
+                    stockColor = '#dc2626';
+                } else if (stock <= 15) {
+                    stockDisplay = String(stock);
+                    stockBg = '#fffbeb';
+                    stockColor = '#d97706';
+                } else {
+                    stockDisplay = String(stock);
+                    stockBg = '#f0fdf4';
+                    stockColor = '#166534';
+                }
                 
                 return `
                     <tr data-id="${p.id}" style="${isHidden ? 'opacity:0.5;background:#fef2f2;' : ''} ${isComingSoon ? 'background:#fff7ed;' : ''}">
+                        <td style="text-align:center;"><input type="checkbox" class="product-checkbox" data-id="${p.id}" onchange="updateBulkActionsBar()" style="cursor:pointer;"></td>
                         <td style="text-align:center;">
                             ${image ? `<img src="${image}" alt="${p.name}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;">` : '<div style="width:40px;height:40px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto;"><i class="fas fa-image" style="color:#94a3b8;font-size:14px;"></i></div>'}
                         </td>
@@ -1905,9 +2144,11 @@
                                 SKU: ${p.sku || '-'} ${variantsCount ? ` | ${variantsCount} خيارات` : ''}
                             </div>
                         </td>
+                        <td style="text-align:center;"><span style="background:${stockBg}; color:${stockColor}; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:800; display:inline-block;">${stockDisplay}${stock === '' ? ' (بلا حد)' : stock === 0 ? ' نفدت' : stock <= 5 ? ' متبقي قليل!' : stock <= 15 ? ' متبقي' : ''}</span></td>
                         <td style="text-align:center;">${displayPrice}</td>
+                        <td style="font-size:11px;text-align:center;opacity:0.7;">${p.createdAt ? new Date(p.createdAt).toLocaleDateString('ar-EG') : '—'}</td>
                         <td style="text-align:center;">
-                            ${(p.categories || []).map(c => `<span style="display:inline-block;background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin:2px;">${c}</span>`).join(' ')}
+                            ${(p.categories || []).map(c => { const cat = allCategories.find(x => x.id == c); return `<span style="display:inline-block;background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin:2px;">${cat ? cat.name : c}</span>`; }).join(' ')}
                         </td>
                         <td style="text-align:center;">
                             <div style="display:flex;gap:5px;justify-content:center;">
@@ -1919,21 +2160,108 @@
                 `;
 }).join('');
         }
+
+        // --- Bulk Selection Functions ---
+        function toggleSelectAllProducts(masterCheckbox) {
+            const checkboxes = document.querySelectorAll('.product-checkbox');
+            checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+            updateBulkActionsBar();
+        }
+
+        function updateBulkActionsBar() {
+            const checked = document.querySelectorAll('.product-checkbox:checked');
+            const bar = document.getElementById('bulkActionsBar');
+            const countEl = document.getElementById('selectedCount');
+            if (!bar || !countEl) return;
+            if (checked.length > 0) {
+                bar.style.display = 'flex';
+                countEl.textContent = `${checked.length} منتج محدد`;
+            } else {
+                bar.style.display = 'none';
+            }
+        }
+
+        function getSelectedProductIds() {
+            return Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => cb.dataset.id);
+        }
+
+        async function bulkDeleteProducts() {
+            const ids = getSelectedProductIds();
+            if (!ids.length) return;
+            if (!confirm(`هل أنت متأكد من حذف ${ids.length} منتج؟`)) return;
+            try {
+                for (const id of ids) {
+                    await DB.deleteProduct(id);
+                }
+                allProducts = allProducts.filter(p => !ids.includes(String(p.id)));
+                renderProductsTable();
+                updateBulkActionsBar();
+                document.getElementById('selectAllProducts').checked = false;
+                if (window.showToast) showToast(`تم حذف ${ids.length} منتج بنجاح`);
+            } catch (e) {
+                console.error('Bulk delete error:', e);
+                if (window.showToast) showToast('حدث خطأ أثناء الحذف', 'error');
+            }
+        }
+
+        async function bulkHideProducts(hide) {
+            const ids = getSelectedProductIds();
+            if (!ids.length) return;
+            try {
+                for (const id of ids) {
+                    const product = allProducts.find(p => String(p.id) === String(id));
+                    if (product) {
+                        product.advanced = product.advanced || {};
+                        product.advanced.hiddenProduct = hide;
+                        await DB.saveProduct(product);
+                    }
+                }
+                renderProductsTable();
+                updateBulkActionsBar();
+                document.getElementById('selectAllProducts').checked = false;
+                if (window.showToast) showToast(hide ? `تم إخفاء ${ids.length} منتج` : `تم إظهار ${ids.length} منتج`);
+            } catch (e) {
+                console.error('Bulk hide error:', e);
+                if (window.showToast) showToast('حدث خطأ', 'error');
+            }
+        }
         
         // --- Orders Table Rendering ---
         function renderOrdersTable() {
             const tbody = document.getElementById('ordersTableBody') || document.querySelector('#ordersTable tbody');
             if (!tbody) return;
             
-            const orders = window.storeOrdersData || [];
+            if (window.storeOrdersData === undefined) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الطلبات...</td></tr>';
+                DB.getOrders().then(orders => {
+                    window.storeOrdersData = orders || [];
+                    renderOrdersTable();
+                }).catch(() => {
+                    window.storeOrdersData = [];
+                    renderOrdersTable();
+                });
+                return;
+            }
+            
+            const orders = window.storeOrdersData;
             if (!orders.length) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);">لا توجد طلبات بعد</td></tr>';
                 return;
             }
             
             tbody.innerHTML = orders.map((o, index) => {
-                const date = new Date(o.date || o.createdAt).toLocaleDateString('ar-EG');
+                const cust = o.customer || {};
+                const name = cust.name || o.customerName || '—';
+                const phone = cust.phone || o.customerPhone || '—';
+                const address = cust.city || cust.address || '—';
+                const items = (o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ');
+                const total = parseFloat(o.total || 0).toFixed(2);
                 const status = o.status || 'جديد';
+                const date = new Date(o.date || o.createdAt).toLocaleDateString('ar-EG');
+                const ipCountry = o.ipCountry || o.ip_country || '—';
+                const filledFields = [name, phone, address, items, total].filter(f => f && f !== '—').length;
+                const completion = Math.round((filledFields / 5) * 100);
+                
                 const statusColors = {
                     'مكتمل': { bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
                     'جديد': { bg: '#fffbeb', color: '#92400e', border: '#fef3c7' },
@@ -1941,21 +2269,36 @@
                     'ملغي': { bg: '#fef2f2', color: '#991b1b', border: '#fecaca' }
                 };
                 const sc = statusColors[status] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
-                const items = (o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ');
                 
                 return `
                     <tr data-id="${o.id}">
-                        <td style="text-align:center;">${index + 1}</td>
-                        <td>${o.customer?.name || o.customerName || '—'}</td>
-                        <td dir="ltr">${o.customer?.phone || o.customerPhone || '—'}</td>
-                        <td>${(o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ')}</td>
-                        <td dir="ltr" style="font-weight:700;color:var(--primary);">${parseFloat(o.total).toFixed(2)} ₪</td>
+                        <td style="text-align:center;font-size:11px;">${index + 1}</td>
+                        <td>
+                            <div style="font-weight:700;">${name}</div>
+                            <div style="font-size:11px;color:#94a3b8;">${phone}</div>
+                        </td>
+                        <td style="font-size:12px;">${address}</td>
+                        <td dir="ltr" style="font-weight:700;color:var(--primary);">${total} ₪</td>
                         <td style="text-align:center;">
                             <span style="background:${sc.bg};color:${sc.color};border:1px solid ${sc.border};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;">${status}</span>
                         </td>
-                        <td style="font-size:11px;opacity:0.7;">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
+                        <td style="font-size:11px;">${ipCountry}</td>
                         <td style="text-align:center;">
-                            <button class="btn btn-outline" onclick="viewOrder('${o.id}')" style="padding:5px 12px;font-size:11px;border-radius:8px;font-weight:700;background:var(--white);border:1px solid var(--border);color:var(--primary);cursor:pointer;" title="التفاصيل"><i class="fas fa-eye"></i></button>
+                            <span style="display:inline-block;background:${completion >= 80 ? '#f0fdf4' : completion >= 50 ? '#fffbeb' : '#fef2f2'};color:${completion >= 80 ? '#166534' : completion >= 50 ? '#92400e' : '#991b1b'};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">${completion}%</span>
+                        </td>
+                        <td style="font-size:11px;opacity:0.7;">${date}</td>
+                        <td style="text-align:center;white-space:nowrap;">
+                            <div style="display:inline-flex;gap:3px;align-items:center;justify-content:center;">
+                                <button onclick="viewOrder('${o.id}')" style="width:28px;height:28px;font-size:11px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;" title="التفاصيل"><i class="fas fa-eye"></i></button>
+                                <select onchange="changeOrderStatus('${o.id}',this.value);this.selectedIndex=0;" style="height:28px;padding:0 6px;font-size:10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:#374151;font-weight:600;cursor:pointer;outline:none;" title="تغيير الحالة">
+                                    <option value="" disabled selected>الحالة</option>
+                                    <option value="جديد">جديد</option>
+                                    <option value="قيد التوصيل">قيد التوصيل</option>
+                                    <option value="مكتمل">مكتمل</option>
+                                    <option value="ملغي">ملغي</option>
+                                </select>
+                                <button onclick="deleteStoreOrder('${o.id}')" style="width:28px;height:28px;font-size:11px;border-radius:6px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;" title="حذف الطلب"><i class="fas fa-trash-alt"></i></button>
+                            </div>
                         </td>
                     </tr>`;
             }).join('');
@@ -2150,10 +2493,13 @@
 
                 tbody.innerHTML = coupons.map(c => {
                     const isRestricted = (c.targetPhone || (c.productIds && c.productIds.length > 0));
+                    const isExhausted = c.maxUses > 0 && (c.usedCount || 0) >= c.maxUses;
+                    const rowBg = isExhausted ? 'style="background:#fef2f2;opacity:0.7;"' : '';
                     return `
-                    <tr>
+                    <tr ${rowBg}>
                         <td>
                             <strong>${c.code}</strong>
+                            ${isExhausted ? '<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;margin-right:5px;">مستنفد</span>' : ''}
                             ${isRestricted ? '<i class="fas fa-lock" style="font-size:10px; color:#f59e0b; margin-right:5px;" title="مقيد برقم هاتف أو منتجات"></i>' : ''}
                         </td>
                         <td>${c.type === 'percentage' ? 'نسبة مئوية (%)' : 'مبلغ ثابت (₪)'}</td>
@@ -2161,8 +2507,12 @@
                         <td>${c.minOrder || 0} ₪</td>
                         <td>${new Date(c.createdAt).toLocaleDateString('ar')}</td>
                         <td>
-                            <span style="font-weight:bold;">${c.usedCount || 0}</span>
+                            ${isExhausted
+                              ? '<span style="color:#ef4444;font-weight:800;font-size:18px;">×</span>'
+                              : `<span style="font-weight:bold;">${c.usedCount || 0}</span>`
+                            }
                             <span style="color:#94a3b8; font-size:11px;"> / ${c.maxUses && c.maxUses > 0 ? c.maxUses : '∞'}</span>
+                            ${isExhausted ? '<br><span style="color:#ef4444;font-size:10px;font-weight:700;">هذا الكوبون استُنفد بالفعل</span>' : ''}
                         </td>
                         <td>
                             <div style="display:flex; gap:5px;">
@@ -2863,6 +3213,23 @@
             document.getElementById('cat_desc').value = cat.description || '';
             document.getElementById('cat_image').value = cat.image || '';
             document.getElementById('cat_icon').value = cat.icon || '';
+            document.getElementById('cat_icon_url').value = (cat.icon && !cat.icon.startsWith('fa-') ? cat.icon : '') || '';
+            // Update icon picker box
+            const iconBox = document.getElementById('catIconPickerBox');
+            if (iconBox) {
+                const iTag = iconBox.querySelector('i');
+                if (iTag) {
+                    if (cat.icon && cat.icon.startsWith('fa-')) {
+                        iTag.className = 'fas ' + cat.icon;
+                        iTag.style.color = 'var(--primary)';
+                    } else {
+                        iTag.className = 'fas fa-icons';
+                        iTag.style.color = '#94a3b8';
+                    }
+                }
+                const hiddenInput = iconBox.querySelector('input');
+                if (hiddenInput) hiddenInput.value = cat.icon || '';
+            }
             document.getElementById('cat_parentId').value = cat.parentId || '';
             document.getElementById('cat_metaTitle').value = cat.metaTitle || '';
             document.getElementById('cat_metaDesc').value = cat.metaDesc || '';
@@ -2880,6 +3247,12 @@
             }
             
             switchTab('tab-category-editor');
+            
+            // Update URL to persist edit state on refresh
+            const url = new URL(window.location);
+            url.searchParams.set('tab', 'category-editor');
+            url.searchParams.set('editCat', cat.id);
+            window.history.replaceState({}, '', url);
         }
 
         function updatePreview(url, previewId) {
@@ -2906,6 +3279,25 @@
             }
         }
 
+        function updateLogoPreview() {
+            const url = document.getElementById('storeLogoInput')?.value || '';
+            const preview = document.getElementById('storeLogoInput_preview');
+            const logoOnly = document.querySelector('input[name="logoOnly"]')?.checked;
+            const storeName = document.querySelector('input[name="storeName"]')?.value || 'المتجر';
+            if (!preview) return;
+            if (url) {
+                if (logoOnly) {
+                    preview.innerHTML = '<img src="' + url + '" style="max-height:70px; max-width:100%; object-fit:contain;">';
+                } else {
+                    preview.innerHTML = '<img src="' + url + '" style="max-height:50px; max-width:60%; object-fit:contain;"> <span style="font-weight:800; font-size:16px; color:#1e293b; margin-right:8px;">' + storeName + '</span>';
+                }
+                preview.classList.remove('empty');
+            } else {
+                preview.innerHTML = '<span style="color:#94a3b8; font-size:13px;">معاينة الشعار ستظهر هنا</span>';
+                preview.classList.add('empty');
+            }
+        }
+
         // --- Shipping Regions Management ---
         function addShippingRegion() {
             const container = document.getElementById('shippingRegionsContainer');
@@ -2920,102 +3312,159 @@
             container.appendChild(div);
         }
 
+        function renderShippingRegions(settings) {
+            const container = document.getElementById('shippingRegionsContainer');
+            if (!container) return;
+            if (container.children.length > 0) return; // keep any rows the user already added
+            if (!settings) settings = window._storeSettings || {};
+            let names = settings['city_names[]'];
+            let prices = settings['city_prices[]'];
+            if (typeof names === 'string') names = [names];
+            if (typeof prices === 'string') prices = [prices];
+            if (!Array.isArray(names)) names = [];
+            if (!Array.isArray(prices)) prices = [];
+            if (names.length === 0 && prices.length === 0) return;
+            const count = Math.max(names.length, prices.length);
+            for (let i = 0; i < count; i++) {
+                const row = document.createElement('div');
+                row.className = 'city-row';
+                row.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text'; nameInput.name = 'city_names[]'; nameInput.className = 'input-luxury';
+                nameInput.style.marginBottom = '0'; nameInput.placeholder = 'اسم المدينة/المنطقة'; nameInput.required = true;
+                nameInput.value = names[i] || '';
+                const priceInput = document.createElement('input');
+                priceInput.type = 'number'; priceInput.name = 'city_prices[]'; priceInput.className = 'input-luxury';
+                priceInput.style.cssText = 'margin-bottom:0; width:150px;'; priceInput.placeholder = 'تكلفة التوصيل'; priceInput.required = true;
+                priceInput.value = prices[i] || '';
+                const btn = document.createElement('button');
+                btn.type = 'button'; btn.className = 'btn btn-outline';
+                btn.style.cssText = 'color:red; border-color:red; padding:0 15px;';
+                btn.innerHTML = '<i class="fa fa-trash"></i>';
+                btn.onclick = function () { this.parentElement.remove(); };
+                row.appendChild(nameInput); row.appendChild(priceInput); row.appendChild(btn);
+                container.appendChild(row);
+            }
+        }
+
         // --- Gallery Management ---
-        let currentGallery = [];
+        let currentGalleryUnified = [];
         let currentVideoUrl = '';
+
+        function syncFromUnified() {
+            currentVideoUrl = '';
+            const images = [];
+            currentGalleryUnified.forEach(item => {
+                if (typeof item === 'string' && item.startsWith('video:')) {
+                    currentVideoUrl = item.replace('video:', '');
+                } else {
+                    images.push(item);
+                }
+            });
+            return images;
+        }
 
         function renderGallery() {
             const container = document.getElementById('gallery_container');
             container.innerHTML = '';
-            
-            // 1. Video Section (if exists)
-            if (currentVideoUrl) {
-                const videoWrapper = document.createElement('div');
-                videoWrapper.className = 'gallery-item video-item';
-                videoWrapper.style = "position:relative; width:100%; aspect-ratio:1; border-radius:12px; overflow:hidden; border:2px solid var(--primary); background:#000; transition:0.2s;";
-                
-                let previewHtml = '';
-                if (currentVideoUrl.includes('youtube.com') || currentVideoUrl.includes('youtu.be')) {
-                    const videoId = getYoutubeId(currentVideoUrl);
-                    previewHtml = `<img src="https://img.youtube.com/vi/${videoId}/mqdefault.jpg" style="width:100%; height:100%; object-fit:cover; opacity:0.7;">`;
-                } else if (currentVideoUrl.includes('vimeo.com')) {
-                    previewHtml = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:white;"><i class="fab fa-vimeo-v" style="font-size:30px;"></i></div>`;
-                } else {
-                    previewHtml = `<video src="${currentVideoUrl}" style="width:100%; height:100%; object-fit:cover; opacity:0.7;"></video>`;
-                }
 
-                videoWrapper.innerHTML = `
-                    ${previewHtml}
-                    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;">
-                        <i class="fas fa-play-circle" style="color:white; font-size:40px; text-shadow:0 0 10px rgba(0,0,0,0.5);"></i>
-                    </div>
-                    <div style="position:absolute; bottom:5px; left:5px; right:5px; background:rgba(255,255,255,0.95); border-radius:8px; display:flex; justify-content:center; align-items:center; padding:5px; box-shadow:0 2px 10px rgba(0,0,0,0.1); opacity:0; transition:0.3s;" class="gallery-controls">
-                        <i class="fas fa-trash-alt" style="color:#ef4444; cursor:pointer;" onclick="removeVideoFromGallery()" title="حذف الفيديو"></i>
-                    </div>
-                    <div style="position:absolute; top:5px; left:5px; background:var(--primary); color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800;">فيديو</div>
-                `;
-                videoWrapper.onmouseover = () => videoWrapper.querySelector('.gallery-controls').style.opacity = '1';
-                videoWrapper.onmouseout = () => videoWrapper.querySelector('.gallery-controls').style.opacity = '0';
-                container.appendChild(videoWrapper);
-            }
-
-            if (currentGallery.length === 0) {
-                if (!currentVideoUrl) {
-                    container.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#94a3b8; font-size:13px; border:2px dashed #e2e8f0; border-radius:15px;">لا توجد صور أو فيديوهات حالياً</div>';
-                }
+            if (currentGalleryUnified.length === 0) {
+                container.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#94a3b8; font-size:13px; border:2px dashed #e2e8f0; border-radius:15px;">لا توجد صور أو فيديوهات حالياً</div>';
                 updateGalleryInputs();
                 return;
             }
 
-            // 2. Main Image Section
-            const mainUrl = currentGallery[0];
+            // 1. Main Item
+            const mainItem = currentGalleryUnified[0];
+            const mainIsVideo = typeof mainItem === 'string' && mainItem.startsWith('video:');
+            const mainUrl = mainIsVideo ? mainItem.replace('video:', '') : mainItem;
             const mainWrapper = document.createElement('div');
             mainWrapper.style = "grid-column: 1 / -1; margin-bottom: 15px;";
+            let mainPreview = '';
+            if (mainIsVideo) {
+                if (mainUrl.includes('youtube.com') || mainUrl.includes('youtu.be')) {
+                    const vid = getYoutubeId(mainUrl);
+                    mainPreview = `<img src="https://img.youtube.com/vi/${vid}/mqdefault.jpg" style="width:100%; height:100%; object-fit:cover;">`;
+                } else {
+                    mainPreview = `<video src="${mainUrl}" style="width:100%; height:100%; object-fit:cover; opacity:0.8;"></video>`;
+                }
+            } else {
+                mainPreview = `<img src="${mainUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+            }
             mainWrapper.innerHTML = `
-                <label class="label-luxury">الصورة الرئيسية (واجهة المنتج)</label>
-                <div class="gallery-item" style="position:relative; width:200px; aspect-ratio:1; border-radius:20px; overflow:hidden; border:3px solid var(--primary); background:#f8fafc;">
-                    <img src="${mainUrl}" style="width:100%; height:100%; object-fit:cover;">
+                <label class="label-luxury">${mainIsVideo ? 'الفيديو الرئيسي' : 'الصورة الرئيسية (واجهة المنتج)'}</label>
+                <div class="gallery-item" style="position:relative; width:200px; aspect-ratio:1; border-radius:20px; overflow:hidden; border:3px solid var(--primary); background:${mainIsVideo ? '#000' : '#f8fafc'};">
+                    ${mainPreview}
+                    ${mainIsVideo ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><i class="fas fa-play-circle" style="color:white; font-size:40px;"></i></div><div style="position:absolute; top:10px; left:10px; background:var(--primary); color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800;">فيديو</div>' : '<div style="position:absolute; top:10px; left:10px; background:var(--primary); color:white; padding:4px 12px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,0.2);">الصورة الرئيسية</div>'}
                     <div style="position:absolute; bottom:10px; left:10px; right:10px; background:rgba(255,255,255,0.9); border-radius:10px; display:flex; justify-content:center; align-items:center; padding:8px; box-shadow:0 5px 15px rgba(0,0,0,0.1); opacity:0; transition:0.3s;" class="gallery-controls">
-                        <i class="fas fa-trash-alt" style="color:#ef4444; cursor:pointer;" onclick="removeFromGallery(0)" title="حذف"></i>
+                        <i class="fas fa-trash-alt" style="color:#ef4444; cursor:pointer;" onclick="removeFromGalleryAll(0)" title="حذف"></i>
                     </div>
-                    <div style="position:absolute; top:10px; left:10px; background:var(--primary); color:white; padding:4px 12px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,0.2);">الصورة الرئيسية</div>
                 </div>
             `;
             mainWrapper.querySelector('.gallery-item').onmouseover = (e) => e.currentTarget.querySelector('.gallery-controls').style.opacity = '1';
             mainWrapper.querySelector('.gallery-item').onmouseout = (e) => e.currentTarget.querySelector('.gallery-controls').style.opacity = '0';
             container.appendChild(mainWrapper);
 
-            // 3. Extra Images Section
-            if (currentGallery.length > 1) {
+            // 2. Extra Items
+            if (currentGalleryUnified.length > 1) {
                 const extraLabel = document.createElement('div');
                 extraLabel.style = "grid-column: 1 / -1; margin-top:10px; margin-bottom:5px;";
-                extraLabel.innerHTML = '<label class="label-luxury">صور إضافية للمعرض (اسحب للترتيب)</label>';
+                extraLabel.innerHTML = '<label class="label-luxury">الوسائط الإضافية (اسحب للترتيب)</label>';
                 container.appendChild(extraLabel);
 
-                currentGallery.slice(1).forEach((url, i) => {
+                currentGalleryUnified.slice(1).forEach((item, i) => {
                     const index = i + 1;
-                    const item = document.createElement('div');
-                    item.className = 'gallery-item';
-                    item.style = `position:relative; width:100%; aspect-ratio:1; border-radius:12px; overflow:hidden; border:2px solid #eee; background:#fff; transition:0.2s;`;
-                    item.innerHTML = `
-                        <img src="${url}" style="width:100%; height:100%; object-fit:cover;">
+                    const isVideo = typeof item === 'string' && item.startsWith('video:');
+                    const url = isVideo ? item.replace('video:', '') : item;
+                    const el = document.createElement('div');
+                    el.className = 'gallery-item';
+                    el.style = `position:relative; width:100%; aspect-ratio:1; border-radius:12px; overflow:hidden; border:2px solid #eee; background:${isVideo ? '#000' : '#fff'}; transition:0.2s;`;
+                    let thumb = '';
+                    if (isVideo) {
+                        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                            const vid = getYoutubeId(url);
+                            thumb = `<img src="https://img.youtube.com/vi/${vid}/mqdefault.jpg" style="width:100%; height:100%; object-fit:cover; opacity:0.7;">`;
+                        } else {
+                            thumb = `<video src="${url}" style="width:100%; height:100%; object-fit:cover; opacity:0.7;"></video>`;
+                        }
+                    } else {
+                        thumb = `<img src="${url}" style="width:100%; height:100%; object-fit:cover;">`;
+                    }
+                    el.innerHTML = `
+                        ${thumb}
+                        ${isVideo ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><i class="fas fa-play-circle" style="color:white; font-size:30px;"></i></div><div style="position:absolute; top:5px; left:5px; background:var(--primary); color:white; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:800;">فيديو</div>' : ''}
                         <div style="position:absolute; bottom:5px; left:5px; right:5px; background:rgba(255,255,255,0.95); border-radius:8px; display:flex; justify-content:space-around; align-items:center; padding:5px; box-shadow:0 2px 10px rgba(0,0,0,0.1); opacity:0; transition:0.3s;" class="gallery-controls">
-                            <i class="fas fa-chevron-right" style="color:var(--primary); cursor:pointer;" onclick="moveImage(${index}, -1)" title="تحريك للخلف"></i>
-                            <i class="fas fa-star" style="color:#ccc; cursor:pointer;" onclick="setMainImage(${index})" title="جعلها الرئيسية"></i>
-                            <i class="fas fa-trash-alt" style="color:#ef4444; cursor:pointer;" onclick="removeFromGallery(${index})" title="حذف"></i>
-                            <i class="fas fa-chevron-left" style="color:var(--primary); cursor:pointer;" onclick="moveImage(${index}, 1)" title="تحريك للأمام"></i>
+                            <i class="fas fa-chevron-right" style="color:var(--primary); cursor:pointer;" onclick="moveImageAll(${index}, -1)" title="تحريك للخلف"></i>
+                            <i class="fas fa-star" style="color:#ccc; cursor:pointer;" onclick="setMainImageAll(${index})" title="جعلها الرئيسية"></i>
+                            <i class="fas fa-trash-alt" style="color:#ef4444; cursor:pointer;" onclick="removeFromGalleryAll(${index})" title="حذف"></i>
+                            <i class="fas fa-chevron-left" style="color:var(--primary); cursor:pointer;" onclick="moveImageAll(${index}, 1)" title="تحريك للأمام"></i>
                         </div>
                     `;
-                    item.onmouseover = () => item.querySelector('.gallery-controls').style.opacity = '1';
-                    item.onmouseout = () => item.querySelector('.gallery-controls').style.opacity = '0';
-                    container.appendChild(item);
+                    el.onmouseover = () => el.querySelector('.gallery-controls').style.opacity = '1';
+                    el.onmouseout = () => el.querySelector('.gallery-controls').style.opacity = '0';
+                    container.appendChild(el);
                 });
             }
             updateGalleryInputs();
         }
 
-        function removeVideoFromGallery() {
-            currentVideoUrl = '';
+        function removeFromGalleryAll(index) {
+            currentGalleryUnified.splice(index, 1);
+            renderGallery();
+        }
+
+        function moveImageAll(index, dir) {
+            const newIndex = index + dir;
+            if (newIndex < 0 || newIndex >= currentGalleryUnified.length) return;
+            const temp = currentGalleryUnified[index];
+            currentGalleryUnified[index] = currentGalleryUnified[newIndex];
+            currentGalleryUnified[newIndex] = temp;
+            renderGallery();
+        }
+
+        function setMainImageAll(index) {
+            const item = currentGalleryUnified.splice(index, 1)[0];
+            currentGalleryUnified.unshift(item);
             renderGallery();
         }
 
@@ -3055,6 +3504,11 @@
 
         function confirmVideoAdd() {
             currentVideoUrl = document.getElementById('videoUrlInput').value.trim();
+            // Remove old video from unified gallery if exists
+            currentGalleryUnified = currentGalleryUnified.filter(i => !(typeof i === 'string' && i.startsWith('video:')));
+            if (currentVideoUrl) {
+                currentGalleryUnified.push('video:' + currentVideoUrl);
+            }
             renderGallery();
             closeVideoModal();
         }
@@ -3098,25 +3552,19 @@
             fileInput.click();
         }
 
-        function moveImage(index, direction) {
-            const newIndex = index + direction;
-            if (newIndex >= 1 && newIndex < currentGallery.length) {
-                const temp = currentGallery[index];
-                currentGallery[index] = currentGallery[newIndex];
-                currentGallery[newIndex] = temp;
-                renderGallery();
-            }
-        }
-
-        function removeFromGallery(index) {
-            currentGallery.splice(index, 1);
-            renderGallery();
-        }
-
         function updateGalleryInputs() {
-            document.getElementById('prod_image').value = currentGallery[0] || '';
-            document.getElementById('prod_extra_images').value = currentGallery.slice(1).join('\n');
-            document.getElementById('prod_video').value = currentVideoUrl || '';
+            const images = [];
+            let video = '';
+            currentGalleryUnified.forEach(item => {
+                if (typeof item === 'string' && item.startsWith('video:')) {
+                    video = item.replace('video:', '');
+                } else {
+                    images.push(item);
+                }
+            });
+            document.getElementById('prod_image').value = images[0] || '';
+            document.getElementById('prod_extra_images').value = images.slice(1).join('\n');
+            document.getElementById('prod_video').value = video || '';
         }
 
         // --- Variant Management ---
@@ -3412,10 +3860,11 @@
             
             if (isHidden) {
                 dropdown.style.display = 'flex';
-                if (!currentGallery || currentGallery.length === 0) {
+                const imageOnlyItems = currentGalleryUnified.filter(i => typeof i === 'string' && !i.startsWith('video:'));
+                if (!imageOnlyItems || imageOnlyItems.length === 0) {
                     dropdown.innerHTML = `<span style="font-size:11px; color:#64748b; padding:10px; text-align:center; width:100%;">معرض الصور فارغ، يرجى إضافة صور أولاً.</span>`;
                 } else {
-                    dropdown.innerHTML = currentGallery.map(url => `
+                    dropdown.innerHTML = imageOnlyItems.map(url => `
                         <img src="${url}" style="width:44px; height:44px; border-radius:8px; object-fit:cover; cursor:pointer; border:2px solid #e2e8f0; transition:0.2s; margin:2px;" 
                              onclick="selectImageFromGalleryDropdown(this, '${url}')"
                              onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='scale(1.08)'"
@@ -3557,7 +4006,8 @@
             document.getElementById('editorTitle').innerText = 'إضافة منتج احترافي';
             document.getElementById('productForm').reset();
             document.getElementById('prod_id').value = '';
-            currentGallery = [];
+            currentGalleryUnified = [];
+            currentVideoUrl = '';
             renderGallery();
             const varContainer = document.getElementById('variants_container');
             if (varContainer) varContainer.innerHTML = '';
@@ -3709,8 +4159,371 @@
         }
 
         const commonIcons = [
-            'fa-star','fa-truck','fa-shield-halved','fa-gem','fa-medal','fa-heart','fa-thumbs-up',
-            'fa-clock','fa-tag','fa-check-circle','fa-bolt','fa-gift','fa-box-open','fa-award'
+            // E-commerce & Shopping
+            {icon:'fa-star', kw:'نجمة تقييم تصنيف إعجاب مفضلة نجم'},
+            {icon:'fa-truck', kw:'شاحنة توصيل شحن نقل'},
+            {icon:'fa-gem', kw:'جوهرة ألماس ماس مجوهرات حجر كريم'},
+            {icon:'fa-medal', kw:'ميدالية جائزة إنجاز'},
+            {icon:'fa-heart', kw:'قلب إعجاب مفضلة حب'},
+            {icon:'fa-thumbs-up', kw:'إعجاب يعجبني thumb up'},
+            {icon:'fa-clock', kw:'ساعة وقت زمن مؤقت ساعه'},
+            {icon:'fa-tag', kw:'بطاقة سعر تاغ علامة تصنيف تاج'},
+            {icon:'fa-check-circle', kw:'موافق صحيح تم دائرة صح'},
+            {icon:'fa-bolt', kw:'صاعقة برق كهرباء سريع'},
+            {icon:'fa-gift', kw:'هدية هدايا'},
+            {icon:'fa-box-open', kw:'صندوق مفتوح فتح'},
+            {icon:'fa-award', kw:'جائزة شهادة تكريم مكافأة'},
+            {icon:'fa-shopping-cart', kw:'عربة تسوق عربه'},
+            {icon:'fa-shopping-bag', kw:'حقيبة تسوق شنطة'},
+            {icon:'fa-shopping-basket', kw:'سلة تسوق سله'},
+            {icon:'fa-credit-card', kw:'بطاقة ائتمان كريدت فيزا ماستر'},
+            {icon:'fa-wallet', kw:'محفظة نقود جيب'},
+            {icon:'fa-money-bill-wave', kw:'فلوس نقود مال عملة درهم دولار'},
+            {icon:'fa-percent', kw:'نسبة مئوية خصم تخفيض'},
+            {icon:'fa-barcode', kw:'باركود رمز منتج'},
+            {icon:'fa-qrcode', kw:'رمز الاستجابة كيو آر QR'},
+            {icon:'fa-cash-register', kw:'كاشير صندوق نقود كاش'},
+            {icon:'fa-tags', kw:'بطاقات أسعار تاجات'},
+            {icon:'fa-cart-plus', kw:'إضافة عربة اضافة'},
+            {icon:'fa-cart-arrow-down', kw:'تنزيل عربة شراء'},
+            {icon:'fa-store', kw:'متجر محل تجارة'},
+            {icon:'fa-store-alt', kw:'متجر محل تجارة'},
+            {icon:'fa-truck-loading', kw:'تحميل شاحنة تفريغ نقل'},
+            {icon:'fa-truck-moving', kw:'شاحنة نقل متحركة'},
+            {icon:'fa-shipping-fast', kw:'شحن سريع توصيل'},
+            {icon:'fa-undo', kw:'تراجع إلغاء رجوع استرجاع'},
+            {icon:'fa-exchange-alt', kw:'تبديل مقايضة صرف بدل'},
+            {icon:'fa-box', kw:'صندوق كرتون علبة'},
+            {icon:'fa-boxes', kw:'صناديق كراتين علب'},
+            {icon:'fa-clipboard-list', kw:'قائمة لائحة حافظة جرد'},
+            {icon:'fa-clipboard-check', kw:'حافظة تدقيق موافقة تم'},
+            {icon:'fa-dolly', kw:'عربة نقل عربه'},
+            {icon:'fa-parachute-box', kw:'صندوق مظلة'},
+            {icon:'fa-gift-card', kw:'بطاقة هدية كارت'},
+            {icon:'fa-hand-holding-heart', kw:'يد قلب عطاء'},
+            // Users & People
+            {icon:'fa-user', kw:'مستخدم شخص عميل زبون حساب عضو'},
+            {icon:'fa-user-friends', kw:'أصدقاء مستخدمين رفاق اصحاب'},
+            {icon:'fa-users', kw:'مستخدمين مجموعة فريق ناس مجموعة'},
+            {icon:'fa-user-tie', kw:'موظف مدير مع مدير'},
+            {icon:'fa-user-circle', kw:'صورة مستخدم شخص دائرة'},
+            {icon:'fa-user-check', kw:'موافقة مستخدم توثيق تحقق'},
+            {icon:'fa-user-plus', kw:'إضافة مستخدم اضافة'},
+            {icon:'fa-user-shield', kw:'حماية مستخدم أمان درع'},
+            {icon:'fa-id-card', kw:'بطاقة هوية تعريف بطاقه'},
+            {icon:'fa-id-badge', kw:'شارة هوية تعريف'},
+            {icon:'fa-address-card', kw:'بطاقة عنوان اتصال'},
+            {icon:'fa-child', kw:'طفل طفلة أطفال ولد'},
+            {icon:'fa-male', kw:'ذكر رجل ولد صبي'},
+            {icon:'fa-female', kw:'أنثى امرأة فتاة بنت'},
+            {icon:'fa-happy', kw:'سعيد فرحان مبسوط مبتهج'},
+            {icon:'fa-smile', kw:'ابتسامة مبتسم سعيد'},
+            {icon:'fa-meh', kw:'متوسط عادي محايد'},
+            {icon:'fa-frown', kw:'حزين عابس كئيب'},
+            {icon:'fa-angry', kw:'غضبان غاضب زعلان'},
+            {icon:'fa-surprise', kw:'متفاجئ مندهش مفاجأة'},
+            {icon:'fa-grin-hearts', kw:'حب قلب إعجاب مبتسم'},
+            {icon:'fa-grin-stars', kw:'نجوم مبتسم رائع'},
+            // Communication & Social
+            {icon:'fa-phone', kw:'هاتف اتصال جوال موبايل تلفون'},
+            {icon:'fa-phone-alt', kw:'هاتف اتصال جوال بديل'},
+            {icon:'fa-envelope', kw:'بريد إلكتروني رسالة ايميل'},
+            {icon:'fa-envelope-open', kw:'بريد مفتوح رسالة'},
+            {icon:'fa-comment', kw:'تعليق رسالة رد'},
+            {icon:'fa-comments', kw:'تعليقات رسائل محادثة دردشة'},
+            {icon:'fa-comment-dots', kw:'تعليق نقاط رسالة'},
+            {icon:'fa-comment-alt', kw:'تعليق بديل رسالة رد'},
+            {icon:'fa-sms', kw:'رسالة نصية جوال مسج'},
+            {icon:'fa-whatsapp', kw:'واتساب وتساب'},
+            {icon:'fa-headset', kw:'سماعة دعم صوتي'},
+            {icon:'fa-support', kw:'دعم فني مساعدة خدمة'},
+            {icon:'fa-info-circle', kw:'معلومات دائرة'},
+            {icon:'fa-info', kw:'معلومات معلومة'},
+            {icon:'fa-question-circle', kw:'سؤال استفسار دائرة'},
+            {icon:'fa-exclamation-circle', kw:'تنبيه مهم دائرة انتباه'},
+            {icon:'fa-exclamation-triangle', kw:'تحذير خطر تنبيه مهم مثلث'},
+            {icon:'fa-bullhorn', kw:'مكبر صوت إعلان نشر'},
+            {icon:'fa-bell', kw:'جرس إشعار تنبيه جرس'},
+            {icon:'fa-bell-slash', kw:'إشعار ممنوع جرس'},
+            {icon:'fa-volume-up', kw:'صوت مرتفع رفع مكبر'},
+            {icon:'fa-volume-mute', kw:'صوت مكتوم كتم'},
+            {icon:'fa-rss', kw:'متابعة تغذية خلاصة'},
+            {icon:'fa-share-alt', kw:'مشاركة نشر توزيع'},
+            {icon:'fa-share', kw:'مشاركة إرسال'},
+            {icon:'fa-send', kw:'إرسال ارسال'},
+            {icon:'fa-paper-plane', kw:'طائرة ورق إرسال'},
+            // Files & Documents
+            {icon:'fa-file', kw:'ملف مستند وثيقة'},
+            {icon:'fa-file-alt', kw:'ملف مستند بديل نص'},
+            {icon:'fa-file-pdf', kw:'ملف PDF بي دي إف'},
+            {icon:'fa-file-word', kw:'ملف وورد مستند'},
+            {icon:'fa-file-excel', kw:'ملف إكسيل اكسل جدول'},
+            {icon:'fa-file-image', kw:'ملف صورة صورة'},
+            {icon:'fa-file-video', kw:'ملف فيديو مقطع فيديو'},
+            {icon:'fa-file-archive', kw:'ملف مضغوط أرشيف'},
+            {icon:'fa-file-code', kw:'ملف كود برمجة كود'},
+            {icon:'fa-copy', kw:'نسخ استنساخ'},
+            {icon:'fa-paste', kw:'لصق الصاق'},
+            {icon:'fa-cut', kw:'قص قص'},
+            {icon:'fa-print', kw:'طباعة طابعة برنت'},
+            {icon:'fa-save', kw:'حفظ سيف'},
+            {icon:'fa-folder', kw:'مجلد فولدر ملف'},
+            {icon:'fa-folder-open', kw:'مجلد مفتوح فتح'},
+            {icon:'fa-folder-plus', kw:'إضافة مجلد اضافة'},
+            {icon:'fa-folder-tree', kw:'شجرة مجلدات فولدرات'},
+            {icon:'fa-newspaper', kw:'جريدة صحيفة خبر'},
+            {icon:'fa-book', kw:'كتاب قراءة'},
+            // Security & Protection
+            {icon:'fa-shield-halved', kw:'درع حماية نصف أمان'},
+            {icon:'fa-shield-alt', kw:'درع حماية أمان'},
+            {icon:'fa-shield', kw:'درع حماية'},
+            {icon:'fa-lock', kw:'قفل مغلق أمان حماية'},
+            {icon:'fa-lock-open', kw:'قفل مفتوح فتح'},
+            {icon:'fa-unlock', kw:'فتح إلغاء قفل'},
+            {icon:'fa-key', kw:'مفتاح كلمة سر'},
+            {icon:'fa-safe', kw:'خزينة أمان حماية'},
+            {icon:'fa-fingerprint', kw:'بصمة إصبع أمان'},
+            {icon:'fa-eye', kw:'عين مشاهدة معاينة'},
+            {icon:'fa-eye-slash', kw:'إخفاء عين ممنوع'},
+            {icon:'fa-ban', kw:'ممنوع محظور رفض'},
+            {icon:'fa-times-circle', kw:'دائرة خطأ إلغاء حذف'},
+            {icon:'fa-check', kw:'صحيح موافق علامة صح'},
+            {icon:'fa-check-double', kw:'تأكيد موافقة مضاعف صح'},
+            {icon:'fa-filter', kw:'تصفية فلترة بحث'},
+            {icon:'fa-sliders-h', kw:'إعدادات تحكم أشرطة تعديل'},
+            {icon:'fa-toggle-on', kw:'تشغيل تفعيل ON'},
+            {icon:'fa-toggle-off', kw:'إيقاف تعطيل OFF'},
+            // Maps & Travel
+            {icon:'fa-map', kw:'خريطة موقع'},
+            {icon:'fa-map-marker-alt', kw:'علامة موقع مكان عنوان'},
+            {icon:'fa-map-pin', kw:'دبوس خريطة تحديد موقع'},
+            {icon:'fa-map-signs', kw:'لافتات خريطة إرشادات اتجاهات'},
+            {icon:'fa-location-dot', kw:'موقع نقطة مكان عنوان'},
+            {icon:'fa-location-arrow', kw:'سهم موقع اتجاه تحديد'},
+            {icon:'fa-compass', kw:'بوصلة اتجاه'},
+            {icon:'fa-globe', kw:'كرة أرضية عالم انترنت'},
+            {icon:'fa-earth-asia', kw:'الأرض الكرة الأرضية عالم'},
+            {icon:'fa-plane', kw:'طائرة سفر طيران'},
+            {icon:'fa-plane-departure', kw:'طائرة إقلاع سفر'},
+            {icon:'fa-plane-arrival', kw:'طائرة وصول هبوط'},
+            {icon:'fa-car', kw:'سيارة عربية'},
+            {icon:'fa-bus', kw:'باص حافلة نقل'},
+            {icon:'fa-train', kw:'قطار مترو'},
+            {icon:'fa-ship', kw:'سفينة مركب بحر'},
+            {icon:'fa-bicycle', kw:'دراجة عجلة'},
+            {icon:'fa-motorcycle', kw:'دراجة نارية موتوسيكل'},
+            {icon:'fa-road', kw:'طريق شارع'},
+            {icon:'fa-route', kw:'مسار طريق خط سير'},
+            {icon:'fa-parking', kw:'موقف سيارات باركنج'},
+            {icon:'fa-gas-pump', kw:'محطة وقود بنزين غاز'},
+            {icon:'fa-charging-station', kw:'شحن كهرباء محطة شحن'},
+            // Technology
+            {icon:'fa-laptop', kw:'لابتوب حاسوب محمول كمبيوتر'},
+            {icon:'fa-laptop-code', kw:'لابتوب برمجة كود برمجه'},
+            {icon:'fa-laptop-house', kw:'لابتوب منزل'},
+            {icon:'fa-desktop', kw:'كمبيوتر مكتبي شاشة حاسوب'},
+            {icon:'fa-mobile', kw:'جوال موبايل هاتف محمول'},
+            {icon:'fa-mobile-alt', kw:'جوال محمول هاتف'},
+            {icon:'fa-tablet', kw:'جهاز لوحي تابلت آيباد'},
+            {icon:'fa-tablet-alt', kw:'جهاز لوحي تابلت'},
+            {icon:'fa-tv', kw:'تلفاز تلفزيون شاشة'},
+            {icon:'fa-camera', kw:'كاميرا تصوير كامره'},
+            {icon:'fa-camera-retro', kw:'كاميرا كلاسيك قديم رترو'},
+            {icon:'fa-video', kw:'فيديو كاميرا تصوير مقطع'},
+            {icon:'fa-video-slash', kw:'فيديو ممنوع إيقاف تصوير'},
+            {icon:'fa-headphones', kw:'سماعات رأس سماعه'},
+            {icon:'fa-microphone', kw:'ميكروفون مايك صوت'},
+            {icon:'fa-microphone-slash', kw:'ميكروفون ممنوع كتم'},
+            {icon:'fa-gamepad', kw:'يد تحكم ألعاب درع لعبه'},
+            {icon:'fa-keyboard', kw:'لوحة مفاتيح كيبورد'},
+            {icon:'fa-mouse', kw:'فأرة ماوس ماوس'},
+            {icon:'fa-wifi', kw:'واي فاي اتصال شبكة لاسلكي'},
+            {icon:'fa-bluetooth', kw:'بلوتوث لاسلكي'},
+            {icon:'fa-database', kw:'قاعدة بيانات داتابيز DB'},
+            {icon:'fa-server', kw:'سيرفر خادم استضافة'},
+            {icon:'fa-cloud', kw:'سحابة كلود استضافة اونلاين'},
+            {icon:'fa-cloud-upload-alt', kw:'رفع سحابة تحميل كلود'},
+            {icon:'fa-cloud-download-alt', kw:'تحميل سحابة تنزيل كلود'},
+            {icon:'fa-sync', kw:'مزامنة تزامن تحديث'},
+            {icon:'fa-cog', kw:'إعدادات ضبط ترس عجله'},
+            {icon:'fa-cogs', kw:'إعدادات ضبط تروس'},
+            // UI & Arrows
+            {icon:'fa-arrow-right', kw:'سهم يمين التالي'},
+            {icon:'fa-arrow-left', kw:'سهم يسار السابق'},
+            {icon:'fa-arrow-up', kw:'سهم أعلى فوق'},
+            {icon:'fa-arrow-down', kw:'سهم أسفل تحت'},
+            {icon:'fa-chevron-right', kw:'مثلث يمين تحديد'},
+            {icon:'fa-chevron-left', kw:'مثلث يسار رجوع'},
+            {icon:'fa-chevron-up', kw:'مثلث أعلى رفع'},
+            {icon:'fa-chevron-down', kw:'مثلث أسفل توسيع'},
+            {icon:'fa-chevron-circle-right', kw:'دائرة يمين'},
+            {icon:'fa-chevron-circle-left', kw:'دائرة يسار'},
+            {icon:'fa-angle-right', kw:'زاوية يمين'},
+            {icon:'fa-angle-left', kw:'زاوية يسار'},
+            {icon:'fa-angle-double-right', kw:'زاوية مزدوجة يمين'},
+            {icon:'fa-angle-double-left', kw:'زاوية مزدوجة يسار'},
+            {icon:'fa-caret-down', kw:'مؤشر أسفل قائمة منسدلة'},
+            {icon:'fa-caret-up', kw:'مؤشر أعلى رفع'},
+            {icon:'fa-sort', kw:'ترتيب فرز تصنيف'},
+            {icon:'fa-sort-up', kw:'ترتيب تصاعدي فرز'},
+            {icon:'fa-sort-down', kw:'ترتيب تنازلي فرز'},
+            {icon:'fa-long-arrow-alt-right', kw:'سهم طويل يمين'},
+            {icon:'fa-long-arrow-alt-left', kw:'سهم طويل يسار'},
+            {icon:'fa-arrows-alt', kw:'أسهم اتجاهات تحريك'},
+            {icon:'fa-arrows-alt-h', kw:'أسهم أفقي يسار يمين'},
+            {icon:'fa-arrows-alt-v', kw:'أسهم رأسي أعلى أسفل'},
+            {icon:'fa-expand', kw:'توسيع تكبير تمديد'},
+            {icon:'fa-compress', kw:'تصغير طي ضغط'},
+            {icon:'fa-expand-alt', kw:'توسيع بديل تكبير'},
+            {icon:'fa-minus', kw:'ناقص طرح إزالة'},
+            {icon:'fa-plus', kw:'زائد إضافة زيادة'},
+            {icon:'fa-times', kw:'إغلاق حذف أزالة إلغاء'},
+            // Business & Office
+            {icon:'fa-briefcase', kw:'حقيبة عمل ملف وظيفة شغل'},
+            {icon:'fa-briefcase-medical', kw:'حقيبة طبية طب'},
+            {icon:'fa-building', kw:'مبنى شركة مؤسسة مقر مكتب'},
+            {icon:'fa-chart-line', kw:'رسم بياني خط إحصاء تطور'},
+            {icon:'fa-chart-bar', kw:'رسم بياني أعمدة إحصاء'},
+            {icon:'fa-chart-pie', kw:'رسم بياني دائري إحصاء احصاء'},
+            {icon:'fa-chart-area', kw:'رسم بياني مساحة إحصاء'},
+            {icon:'fa-chart-simple', kw:'رسم بياني بسيط'},
+            {icon:'fa-handshake', kw:'مصافحة اتفاق شراكة صفقه'},
+            {icon:'fa-handshake-simple', kw:'مصافحة بسيطة'},
+            {icon:'fa-hand-holding-usd', kw:'يد تحمل دولار مال'},
+            {icon:'fa-hand-holding-dollar', kw:'يد تحمل دولار مال فلوس'},
+            {icon:'fa-piggy-bank', kw:'بنك أصبع حصالة ادخار'},
+            {icon:'fa-coins', kw:'عملات فلوس نقود'},
+            {icon:'fa-sack-dollar', kw:'كيس فلوس نقود مال'},
+            {icon:'fa-tasks', kw:'مهام مهمات قائمة أعمال'},
+            {icon:'fa-list', kw:'قائمة عادية لائحة'},
+            {icon:'fa-list-ul', kw:'قائمة نقطية تعداد نقط'},
+            {icon:'fa-list-ol', kw:'قائمة مرقمة تعداد رقمي'},
+            {icon:'fa-th-large', kw:'شبكة مربعات كبيرة جداول'},
+            {icon:'fa-th', kw:'شبكة مربعات مربعات'},
+            {icon:'fa-th-list', kw:'قائمة شبكة جداول'},
+            {icon:'fa-table', kw:'جدول بيانات اكسل'},
+            {icon:'fa-columns', kw:'أعمدة عمودين تخطيط'},
+            // Nature & Food
+            {icon:'fa-leaf', kw:'ورقة شجر نبات أخضر ورق'},
+            {icon:'fa-tree', kw:'شجرة كريسمس عيد ميلاد'},
+            {icon:'fa-seedling', kw:'شتلة بذرة زرع نبات'},
+            {icon:'fa-flower', kw:'زهرة ورد زهور'},
+            {icon:'fa-pagelines', kw:'ورقة نبات خطوط'},
+            {icon:'fa-recycle', kw:'إعادة تدوير تدوير بيئة'},
+            {icon:'fa-droplet', kw:'قطرة ماء سائل مطر'},
+            {icon:'fa-fire', kw:'نار حريق لهب ساخن'},
+            {icon:'fa-sun', kw:'شمس صيف حار ضوء'},
+            {icon:'fa-moon', kw:'قمر ليل'},
+            {icon:'fa-cloud-sun', kw:'غيمة شمس طقس جو'},
+            {icon:'fa-apple-alt', kw:'تفاح فاكهة أبل ابل'},
+            {icon:'fa-utensils', kw:'أدوات مائدة أدوات مطبخ'},
+            {icon:'fa-hamburger', kw:'برجر همبرغر ساندويتش اكل'},
+            {icon:'fa-pizza-slice', kw:'شريحة بيتزا اكل طعام'},
+            {icon:'fa-coffee', kw:'قهوة كافيه مشروب قهوه'},
+            {icon:'fa-mug-hot', kw:'كوب ساخن شاي مشروب'},
+            {icon:'fa-cocktail', kw:'كوكتيل مشروب عصير'},
+            {icon:'fa-glass-cheers', kw:'كأس نخب احتفال مشروب'},
+            {icon:'fa-birthday-cake', kw:'كعكة عيد ميلاد حفلة'},
+            {icon:'fa-candy-cane', kw:'حلوى عيد ميلاد'},
+            {icon:'fa-cookie', kw:'بسكويت كوكيز حلو'},
+            {icon:'fa-drumstick-bite', kw:'دجاج فخدة دجاج اكل طعام'},
+            {icon:'fa-carrot', kw:'جزر خضار جزره'},
+            {icon:'fa-bread-slice', kw:'خبز شريحة خبز عيش'},
+            {icon:'fa-cheese', kw:'جبنة جبن جبنه'},
+            {icon:'fa-egg', kw:'بيض بيضة'},
+            // Misc
+            {icon:'fa-certificate', kw:'شهادة توثيق معتمد موثق'},
+            {icon:'fa-ribbon', kw:'شريط هدية زينة'},
+            {icon:'fa-crown', kw:'تاج ملكة ملك'},
+            {icon:'fa-king', kw:'ملك'},
+            {icon:'fa-queen', kw:'ملكة'},
+            {icon:'fa-diamond', kw:'ألماسة ماسة مجوهرات'},
+            {icon:'fa-ring', kw:'خاتم دبلة مجوهرات محبس خطوبة زواج'},
+            {icon:'fa-fire-flame-curved', kw:'نار لهب مشتعل flame'},
+            {icon:'fa-circle', kw:'دائرة شكل دائري'},
+            {icon:'fa-square', kw:'مربع مستطيل شكل'},
+            {icon:'fa-infinity', kw:'لا نهائي مالا نهاية انفنتي'},
+            {icon:'fa-link', kw:'رابط لينك اتصال link'},
+            {icon:'fa-chains', kw:'سلاسل رابط'},
+            {icon:'fa-palette', kw:'لوحة ألوان الألوان رسم الوان'},
+            {icon:'fa-paint-brush', kw:'فرشاة دهان طلاء رسم brush'},
+            {icon:'fa-paint-roller', kw:'أسطوانة دهان طلاء'},
+            {icon:'fa-wand-magic-sparkles', kw:'عصا سحرية سحر magic wand'},
+            {icon:'fa-screwdriver-wrench', kw:'مفك براغي عدة صيانة'},
+            {icon:'fa-tools', kw:'أدوات صيانة عدة اصلاح'},
+            {icon:'fa-wrench', kw:'مفتاح ربط صيانة مفتاح'},
+            {icon:'fa-hammer', kw:'مطرقة شاكوش'},
+            {icon:'fa-plug', kw:'قابس كهرباء شاحن'},
+            {icon:'fa-lightbulb', kw:'لمبة ضوء فكرة'},
+            {icon:'fa-battery-full', kw:'بطارية كاملة شحن مشحون'},
+            {icon:'fa-battery-three-quarters', kw:'بطارية ثلاثة أرباع شحن'},
+            {icon:'fa-snowflake', kw:'ندفة ثلج ثلج شتاء بارد'},
+            {icon:'fa-umbrella', kw:'مظلة شمسية مطر'},
+            {icon:'fa-umbrella-beach', kw:'مظلة شاطئ صيف مصيف'},
+            {icon:'fa-swimmer', kw:'سباحة سباح'},
+            {icon:'fa-dumbbell', kw:'دمبل حديد رياضي جيم'},
+            {icon:'fa-running', kw:'جري ركض عداء رياضة'},
+            {icon:'fa-walking', kw:'مشي تمشية'},
+            {icon:'fa-heartbeat', kw:'قلب نبض صحي'},
+            {icon:'fa-pulse', kw:'نبض صحي قلب'},
+            {icon:'fa-stethoscope', kw:'سماعة طبيب طب دكتور صحه'},
+            {icon:'fa-syringe', kw:'حقنة إبرة طب مستشفى ابره'},
+            {icon:'fa-flask', kw:'قوارير مختبر كيمياء'},
+            {icon:'fa-microscope', kw:'مجهر فحص مختبر'},
+            {icon:'fa-search', kw:'بحث ابحث عن'},
+            {icon:'fa-search-plus', kw:'بحث تكبير زوم بحث'},
+            {icon:'fa-search-minus', kw:'بحث تصغير زوم بحث'},
+            {icon:'fa-download', kw:'تحميل تنزيل'},
+            {icon:'fa-upload', kw:'رفع رفع ملف'},
+            {icon:'fa-flag', kw:'علم دولة علم راية'},
+            {icon:'fa-bookmark', kw:'علامة مرجعية حفظ اشارة مرجعيه'},
+            {icon:'fa-star-half-alt', kw:'نصف نجمة تقييم تقييم نصف'},
+            {icon:'fa-star-half', kw:'نصف نجمة'},
+            {icon:'fa-star-of-life', kw:'نجمة الحياة طب طوارئ'},
+            {icon:'fa-calendar', kw:'تقويم تاريخ يوم'},
+            {icon:'fa-calendar-alt', kw:'تقويم بديل تاريخ'},
+            {icon:'fa-calendar-check', kw:'تقويم موافقة موعد حجز'},
+            {icon:'fa-calendar-plus', kw:'تقويم إضافة اضافة موعد'},
+            {icon:'fa-calendar-day', kw:'تقويم يوم موعد'},
+            {icon:'fa-calendar-week', kw:'تقويم أسبوع اسبوع'},
+            {icon:'fa-hourglass', kw:'ساعة رملية زمن وقت'},
+            {icon:'fa-hourglass-half', kw:'ساعة رملية نصف'},
+            {icon:'fa-hourglass-end', kw:'ساعة رملية نهاية انتهى'},
+            {icon:'fa-stopwatch', kw:'ساعة إيقاف مؤقت زمن ساعه'},
+            {icon:'fa-timer', kw:'مؤقت زمني توقيت ساعه timer'},
+            {icon:'fa-alarm-clock', kw:'منبه إنذار صباح'},
+            {icon:'fa-history', kw:'تاريخ سجل التاريح'},
+            {icon:'fa-redo', kw:'إعادة تكرار اعادة'},
+            {icon:'fa-undo-alt', kw:'تراجع رجوع'},
+            {icon:'fa-reply', kw:'رد إجابة اجابه'},
+            {icon:'fa-reply-all', kw:'رد الجميع'},
+            {icon:'fa-forward', kw:'تقدم أمام إعادة'},
+            {icon:'fa-backward', kw:'رجوع خلف'},
+            {icon:'fa-play', kw:'تشغيل بدء play'},
+            {icon:'fa-pause', kw:'إيقاف مؤقت توقف pause'},
+            {icon:'fa-stop', kw:'إيقاف توقف stop'},
+            {icon:'fa-step-forward', kw:'خطوة للأمام'},
+            {icon:'fa-step-backward', kw:'خطوة للخلف'},
+            {icon:'fa-fast-forward', kw:'تقديم سريع'},
+            {icon:'fa-fast-backward', kw:'ترجيع سريع'},
+            {icon:'fa-eject', kw:'إخراج تخرج اخراج eject'},
+            {icon:'fa-ellipsis-h', kw:'نقاط أفقية أفقي قائمة'},
+            {icon:'fa-ellipsis-v', kw:'نقاط رأسية رأسي قائمة'},
+            {icon:'fa-grip-horizontal', kw:'قبضة أفقية ترتيب'},
+            {icon:'fa-grip-vertical', kw:'قبضة رأسية ترتيب'},
+            {icon:'fa-grip-lines', kw:'خطوط قائمة مربع'},
+            {icon:'fa-ad', kw:'إعلان دعاية اعلان'},
+            {icon:'fa-bullseye', kw:'هدف نقطة تركيز'},
+            {icon:'fa-crosshairs', kw:'مشهدان تصويب تحديد'},
+            {icon:'fa-home', kw:'الرئيسية رئيسية بيت'},
+            {icon:'fa-home-lg', kw:'رئيسية منزل كبير'},
+            {icon:'fa-house', kw:'منزل بيت'},
+            {icon:'fa-door-open', kw:'باب مفتوح فتح'},
+            {icon:'fa-door-closed', kw:'باب مغلق إغلاق'},
+            {icon:'fa-window', kw:'نافذة إطار منظره'},
+            {icon:'fa-window-minimize', kw:'تصغير نافذة تصغير'},
+            {icon:'fa-window-maximize', kw:'تكبير نافذة تكبير'},
+            {icon:'fa-window-restore', kw:'استعادة نافذة تدوير'},
         ];
 
         function openIconPicker(box) {
@@ -3720,28 +4533,121 @@
                 picker.id = 'iconPickerOverlay';
                 picker.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; display:none; align-items:center; justify-content:center;';
                 picker.innerHTML = `
-                    <div style="background:#fff; padding:25px; border-radius:20px; max-width:300px; width:90%;">
-                        <h4 style="margin-bottom:15px; text-align:center;">اختر الأيقونة</h4>
-                        <div id="iconsGrid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px;"></div>
-                        <button class="btn btn-outline" style="width:100%; margin-top:20px;" onclick="document.getElementById('iconPickerOverlay').style.display='none'">إغلاق</button>
+                    <div style="background:#fff; padding:20px; border-radius:20px; max-width:600px; width:95%; max-height:85vh; display:flex; flex-direction:column;">
+                        <h4 style="margin-bottom:12px; text-align:center;">اختر الأيقونة <span style="font-size:12px;color:var(--text-muted);font-weight:400;">(${commonIcons.length} أيقونة)</span></h4>
+                        <input type="text" id="iconSearchInput" placeholder="ابحث عن أيقونة..." style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:13px;margin-bottom:12px;outline:none;font-family:inherit;" oninput="filterIcons(this.value)">
+                        <div id="iconsGrid" style="display:grid; grid-template-columns: repeat(6, 1fr); gap:8px; overflow-y:auto; padding:5px;"></div>
+                        <div style="margin-top:10px; padding-top:12px; border-top:1px solid #e2e8f0;">
+                            <div style="font-size:13px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">أو أدخل كود أيقونة (FontAwesome) أو رابط صورة:</div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text" id="customIconInput" placeholder="مثال: fa-star  أو  https://example.com/icon.png" style="flex:1;padding:10px 14px;border:2px solid #e2e8f0;border-radius:10px;font-size:13px;outline:none;font-family:inherit;" oninput="previewCustomIcon(this.value)">
+                                <button class="btn btn-primary" onclick="applyCustomIcon()" style="white-space:nowrap;"><i class="fas fa-check"></i> استخدام</button>
+                            </div>
+                            <div id="customIconPreview" style="margin-top:8px; display:flex; align-items:center; gap:10px; min-height:40px;">
+                                <span style="font-size:13px; color:#94a3b8;">معاينة:</span>
+                                <i id="customIconPreviewTag" class="fas fa-icons" style="font-size:24px; color:#94a3b8; display:none;"></i>
+                                <img id="customIconPreviewImg" style="width:40px; height:40px; border-radius:8px; object-fit:cover; display:none;">
+                                <span id="customIconPreviewText" style="font-size:12px; color:#94a3b8;"></span>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline" style="width:100%; margin-top:12px; flex-shrink:0;" onclick="document.getElementById('iconPickerOverlay').style.display='none'">إغلاق</button>
                     </div>
                 `;
                 document.body.appendChild(picker);
                 
                 const grid = document.getElementById('iconsGrid');
-                commonIcons.forEach(icon => {
+                commonIcons.forEach(item => {
                     const iBox = document.createElement('div');
-                    iBox.style = 'padding:10px; border:1px solid #eee; border-radius:10px; cursor:pointer; text-align:center; font-size:20px;';
-                    iBox.innerHTML = `<i class="fas ${icon}"></i>`;
+                    iBox.className = 'icon-pick-item';
+                    iBox.dataset.icon = item.icon;
+                    iBox.dataset.kw = item.kw || '';
+                    iBox.style = 'padding:8px; border:1px solid #eee; border-radius:8px; cursor:pointer; text-align:center; font-size:18px; transition:0.15s;';
+                    iBox.innerHTML = `<i class="fas ${item.icon}"></i>`;
                     iBox.onclick = () => {
-                        window.currentPickingBox.querySelector('i').className = 'fas ' + icon;
-                        window.currentPickingBox.querySelector('input').value = icon;
+                        setIconFromPicker(item.icon);
                         picker.style.display = 'none';
                     };
                     grid.appendChild(iBox);
                 });
+                
+                window.filterIcons = function(query) {
+                    const term = query.toLowerCase().trim();
+                    document.querySelectorAll('.icon-pick-item').forEach(el => {
+                        const match = !term || el.dataset.icon.includes(term) || (el.dataset.kw || '').includes(term);
+                        el.style.display = match ? '' : 'none';
+                    });
+                };
+                
+                window.previewCustomIcon = function(val) {
+                    const tag = document.getElementById('customIconPreviewTag');
+                    const img = document.getElementById('customIconPreviewImg');
+                    const txt = document.getElementById('customIconPreviewText');
+                    tag.style.display = 'none';
+                    img.style.display = 'none';
+                    txt.textContent = '';
+                    if (!val.trim()) return;
+                    if (val.trim().startsWith('fa-')) {
+                        tag.className = 'fas ' + val.trim();
+                        tag.style.display = 'inline-block';
+                        tag.style.color = 'var(--primary)';
+                        txt.textContent = ' (FontAwesome)';
+                    } else if (val.trim().startsWith('http://') || val.trim().startsWith('https://')) {
+                        img.src = val.trim();
+                        img.style.display = 'inline-block';
+                        txt.textContent = ' (صورة)';
+                    } else {
+                        txt.textContent = '❌ أدخل fa-... أو رابط صورة';
+                    }
+                };
+                
+                window.applyCustomIcon = function() {
+                    const val = document.getElementById('customIconInput').value.trim();
+                    if (!val) return;
+                    if (val.startsWith('fa-')) {
+                        setIconFromPicker(val);
+                        picker.style.display = 'none';
+                    } else if (val.startsWith('http://') || val.startsWith('https://')) {
+                        // URL icon: update the cat_icon_url field directly
+                        const iconUrlInput = document.getElementById('cat_icon_url');
+                        if (iconUrlInput) iconUrlInput.value = val;
+                        // Update picker box preview
+                        const box = window.currentPickingBox;
+                        if (box) {
+                            const iTag = box.querySelector('i');
+                            if (iTag) { iTag.className = 'fas fa-image'; iTag.style.color = 'var(--primary)'; }
+                            const hiddenInput = box.querySelector('input');
+                            if (hiddenInput) hiddenInput.value = val;
+                        }
+                        picker.style.display = 'none';
+                    }
+                };
+                
+                window.setIconFromPicker = function(iconClass) {
+                    const box = window.currentPickingBox;
+                    if (!box) return;
+                    const iTag = box.querySelector('i');
+                    if (iTag) { iTag.className = 'fas ' + iconClass; iTag.style.color = 'var(--primary)'; }
+                    const hiddenInput = box.querySelector('input');
+                    if (hiddenInput) hiddenInput.value = iconClass;
+                    // Clear URL field since we're using a FontAwesome icon
+                    const urlInput = document.getElementById('cat_icon_url');
+                    if (urlInput) urlInput.value = '';
+                };
             }
             window.currentPickingBox = box;
+            // Sync existing URL into custom input if present
+            const urlInput = document.getElementById('cat_icon_url');
+            const customInput = document.getElementById('customIconInput');
+            if (customInput && urlInput && urlInput.value) {
+                customInput.value = urlInput.value;
+                previewCustomIcon(urlInput.value);
+            } else if (customInput) {
+                const hiddenInput = box.querySelector('input');
+                if (customInput && hiddenInput && hiddenInput.value) {
+                    customInput.value = hiddenInput.value;
+                    previewCustomIcon(hiddenInput.value);
+                }
+            }
             picker.style.display = 'flex';
         }
 
@@ -3784,18 +4690,28 @@
             document.getElementById('prod_salePrice').value = product.salePrice || '';
             document.getElementById('prod_wholesalePrice').value = product.wholesalePrice || '';
             document.getElementById('prod_costPrice').value = product.costPrice || '';
+            document.getElementById('prod_stock').value = (product.advanced && product.advanced.stock !== undefined && product.advanced.stock !== null) ? product.advanced.stock : '';
             document.getElementById('prod_sku').value = product.sku || '';
             document.getElementById('prod_desc').value = product.description || '';
             document.getElementById('prod_adminNote').value = product.adminNote || '';
             
 
             // Gallery
-            currentGallery = [];
-            if(product.image) currentGallery.push(product.image);
-            if(product.images) currentGallery.push(...product.images.slice(1));
+            currentGalleryUnified = [];
+            if(product.image) currentGalleryUnified.push(product.image);
+            if(product.images && Array.isArray(product.images) && product.images.length > 0) {
+                if(product.images[0] === product.image) {
+                    currentGalleryUnified.push(...product.images.slice(1));
+                } else {
+                    currentGalleryUnified.push(...product.images);
+                }
+            }
             
             // Video
             currentVideoUrl = (product.advanced && product.advanced.productVideo) || (product.video) || '';
+            if (currentVideoUrl) {
+                currentGalleryUnified.push('video:' + currentVideoUrl);
+            }
             
             renderGallery();
 
@@ -3842,7 +4758,7 @@
                 viewBtn.innerHTML = '<i class="fas fa-external-link-alt"></i> شاهد المنتج';
                 headerActions.prepend(viewBtn);
             }
-            viewBtn.href = 'index.html?app=product.show.' + product.id;
+            viewBtn.href = 'index.html#?product=' + product.id;
             viewBtn.style.display = 'flex';
 
             const publishBtn = document.getElementById('publishBtn');
@@ -3981,7 +4897,7 @@
             const checkboxes = this.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach(cb => {
                 if (cb.name && !cb.name.startsWith('tab')) {
-                    data[cb.name] = cb.checked ? 'true' : 'false';
+                    data[cb.name] = cb.checked;
                 }
             });
 
@@ -4004,10 +4920,12 @@
             }
 
             // Collect advanced fields into the advanced JSONB column
-            data.advanced = data.advanced || {};
+            // First, preserve existing advanced data from the loaded product
+            const existingProduct = allProducts.find(p => String(p.id) === String(data.id));
+            data.advanced = (existingProduct && existingProduct.advanced) ? { ...existingProduct.advanced } : {};
             ['isComingSoon', 'isRecommended'].forEach(key => {
                 if (key in data) {
-                    data.advanced[key] = data[key] === 'true';
+                    data.advanced[key] = !!data[key];
                     delete data[key];
                 }
             });
@@ -4015,13 +4933,18 @@
                 data.advanced.comingSoonDate = data.comingSoonDate;
             }
             delete data.comingSoonDate;
-
-            // Map extraImages → images
-            if (data.extraImages) {
-                try { data.images = JSON.parse(data.extraImages); } catch(e) { data.images = []; }
+            if (data.stock !== undefined && data.stock !== '') {
+                data.advanced.stock = parseInt(data.stock) || 0;
+                delete data.stock;
             }
+
+            // Save the entire gallery array (main image + extra images)
+            data.images = currentGalleryUnified.filter(i => typeof i === 'string' && !i.startsWith('video:'));
             delete data.extraImages;
-            // Remove UI-only fields not in DB
+            // Move productVideo into advanced
+            if (data.productVideo) {
+                data.advanced.productVideo = data.productVideo;
+            }
             delete data.productVideo;
 
             try {
@@ -4065,7 +4988,7 @@
 
         function triggerUpload(targetId, isMultiple = false) {
             // Determine if we should allow video based on targetId patterns
-            const isVideoTarget = targetId === 'videoUrlInput' || 
+            const isVideoTarget = targetId === 'reelVideoUrlInput' || 
                                 targetId.startsWith('hero_video_') || 
                                 targetId.startsWith('video_url_') || 
                                 targetId.startsWith('hero_slide_');
@@ -4113,7 +5036,7 @@
                         if(url) {
                             if(targetId === 'gallery_add') {
                                 // Add image to product gallery
-                                currentGallery.push(url);
+                                currentGalleryUnified.push(url);
                                 renderGallery();
                             } else if(targetId) {
                                 const target = document.getElementById(targetId);
@@ -4127,7 +5050,7 @@
                                     updatePreview(url, targetId + '_preview');
                                 }
                             } else {
-                                currentGallery.push(url);
+                                currentGalleryUnified.push(url);
                                 renderGallery();
                             }
                             showToast('✅ تم الرفع بنجاح!');
@@ -4150,11 +5073,11 @@
                 name: document.getElementById('cat_name').value,
                 description: document.getElementById('cat_desc').value,
                 image: document.getElementById('cat_image').value,
-                icon: document.getElementById('cat_icon').value,
+                icon: document.getElementById('cat_icon_url').value || document.getElementById('cat_icon').value,
                 parentId: document.getElementById('cat_parentId').value,
                 metaTitle: document.getElementById('cat_metaTitle').value,
                 metaDesc: document.getElementById('cat_metaDesc').value,
-                priority: parseInt(document.getElementById('cat_priority').value) || 0,
+                priority: document.getElementById('cat_priority').value !== '' ? parseInt(document.getElementById('cat_priority').value) : (catId ? (allCategories.find(c => c.id == catId)?.priority ?? 0) : (allCategories.length ? Math.max(...allCategories.map(c => c.priority || 0)) + 10 : 0)),
                 isActive: document.getElementById('cat_isActive').checked,
                 isBrand: document.getElementById('cat_isBrand').checked
             };
@@ -4174,13 +5097,26 @@
 
         async function loadCategories() {
             allCategories = await DB.getCategories();
+            allCategories.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+            window.allCategories = allCategories;
+            window._allCats = allCategories;
+
+            // Populate parent category dropdown in editor
+            const parentSelect = document.getElementById('cat_parentId');
+            if (parentSelect) {
+                const currentVal = parentSelect.value;
+                const parentCats = allCategories.filter(c => !c.parentId);
+                parentSelect.innerHTML = '<option value="">لا يوجد (قسم رئيسي)</option>' + parentCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                if (currentVal) parentSelect.value = currentVal;
+            }
+
             const tbody = document.querySelector('#categoriesTable tbody');
             if (!tbody) return;
             if (!allCategories || allCategories.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted);">لا توجد تصنيفات بعد</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-muted);">لا توجد تصنيفات بعد</td></tr>';
                 return;
             }
-            tbody.innerHTML = allCategories.map(c => {
+            tbody.innerHTML = allCategories.map((c, ci) => {
                 const parent = allCategories.find(p => p.id === c.parentId);
                 const productCount = allProducts.filter(p => (p.categories || []).includes(c.id)).length;
                 return `<tr>
@@ -4188,14 +5124,30 @@
                     <td style="font-weight:700;">${c.name} ${c.isBrand ? '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">علامة تجارية</span>' : ''}</td>
                     <td>${parent ? parent.name : '—'}</td>
                     <td>${productCount}</td>
+                    <td style="font-size:11px;color:var(--text-muted);">${c.priority || 0}</td>
                     <td>
-                        <button onclick="openCategoryEdit('${c.id}')" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:5px;"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteCategory('${c.id}')" style="background:#fef2f2;color:#ef4444;border:1px solid #fee2e2;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;"><i class="fas fa-trash"></i></button>
+                        <button onclick="openCategoryEdit('${c.id}')" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:5px;" title="تعديل"><i class="fas fa-edit"></i></button>
+                        ${ci > 0 ? `<button onclick="moveCategory(${ci}, -1)" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:5px 9px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:5px;" title="رفع للأعلى"><i class="fas fa-chevron-up"></i></button>` : ''}
+                        ${ci < allCategories.length - 1 ? `<button onclick="moveCategory(${ci}, 1)" style="background:#fef2f2;color:#ef4444;border:1px solid #fecaca;padding:5px 9px;border-radius:8px;cursor:pointer;font-family:inherit;margin-left:5px;" title="خفض للأسفل"><i class="fas fa-chevron-down"></i></button>` : ''}
+                        <button onclick="deleteCategory('${c.id}')" style="background:#fef2f2;color:#ef4444;border:1px solid #fee2e2;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;" title="حذف"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>`;
             }).join('');
         }
         window.loadCategories = loadCategories;
+
+        window.moveCategory = async function(index, dir) {
+            const target = index + dir;
+            if (target < 0 || target >= allCategories.length) return;
+            // Swap positions in array and update priorities to match new indices
+            [allCategories[index], allCategories[target]] = [allCategories[target], allCategories[index]];
+            allCategories[index].priority = index * 10;
+            allCategories[target].priority = target * 10;
+            // Save only the two swapped categories
+            await Promise.all([DB.saveCategory(allCategories[index]), DB.saveCategory(allCategories[target])]);
+            window.allCategories = allCategories;
+            loadCategories();
+        };
 
         async function deleteCategory(id) {
             if (!confirm('هل أنت متأكد من حذف هذا القسم؟')) return;
@@ -4464,9 +5416,14 @@
                         </span>
                     </td>
                     <td>
-                        <button class="btn btn-outline" style="padding:8px 15px; font-size:12px;" onclick='openDistributorModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>
-                            <i class="fas fa-edit"></i> إدارة
-                        </button>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-primary" style="padding:8px 15px; font-size:11px;" onclick='showDistributorDetail(${JSON.stringify(d).replace(/'/g, "&apos;")})'>
+                                <i class="fas fa-eye"></i> التفاصيل
+                            </button>
+                            <button class="btn btn-outline" style="padding:8px 15px; font-size:11px;" onclick='openDistributorModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>
+                                <i class="fas fa-edit"></i> إدارة
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 <tr id="details-${d.id}" style="display:none; background:#f8fafc;">
@@ -4529,6 +5486,160 @@
                 }
             } else {
                 detailsRow.style.display = 'none';
+            }
+        }
+
+        window._currentDistDetail = null;
+        window._openDistEditFromDetail = function() {
+            if (window._currentDistDetail) openDistributorModal(window._currentDistDetail);
+        };
+
+        async function showDistributorDetail(dist) {
+            window._currentDistDetail = dist;
+            // Update URL with distributor ID so refresh keeps the context
+            const url = new URL(window.location);
+            url.searchParams.set('tab', 'distributor-detail');
+            url.searchParams.set('distId', dist.id);
+            window.history.replaceState({}, '', url);
+            switchTab('tab-distributor-detail');
+            document.getElementById('distDetailName').textContent = dist.name || 'الموزع';
+            const statusLabels = { approved: 'نشط', pending: 'قيد المراجعة', rejected: 'مرفوض' };
+            const statusColors = { approved: '#166534', pending: '#92400e', rejected: '#991b1b' };
+            document.getElementById('distDetailStatus').innerHTML = `
+                <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:800;background:${dist.status === 'approved' ? '#f0fdf4' : dist.status === 'rejected' ? '#fef2f2' : '#fffbeb'};color:${statusColors[dist.status] || '#92400e'};border:1px solid ${dist.status === 'approved' ? '#bbf7d0' : dist.status === 'rejected' ? '#fecaca' : '#fef3c7'};">
+                    <i class="fas ${dist.status === 'approved' ? 'fa-check-circle' : dist.status === 'rejected' ? 'fa-times-circle' : 'fa-clock'}"></i> ${statusLabels[dist.status] || dist.status}
+                </span>
+            `;
+
+            const body = document.getElementById('distDetailBody');
+            body.innerHTML = '<div style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--primary);"></i></div>';
+
+            try {
+                const orders = await DB.getOrders();
+                const distOrders = orders.filter(o => {
+                    const phoneMatch = o.customer && String(o.customer.phone) === String(dist.phone);
+                    const idMatch = o.distributorId && String(o.distributorId) === String(dist.id);
+                    return phoneMatch || idMatch;
+                });
+                const totalOrders = distOrders.length;
+                const totalSpent = distOrders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0);
+                const lastOrder = distOrders.length > 0 ? distOrders.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))[0] : null;
+
+                const purchasedProducts = await DB.getDistributorPurchasedProducts(dist.phone);
+
+                body.innerHTML = `
+                    <div style="padding:25px;">
+                        <!-- Stats Cards -->
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:25px;">
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);text-align:center;">
+                                <div style="font-size:28px;font-weight:900;color:var(--primary);">${totalOrders}</div>
+                                <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-top:5px;">إجمالي الطلبات</div>
+                            </div>
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);text-align:center;">
+                                <div style="font-size:28px;font-weight:900;color:#10b981;">${totalSpent.toFixed(2)} ₪</div>
+                                <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-top:5px;">إجمالي الإنفاق</div>
+                            </div>
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);text-align:center;">
+                                <div style="font-size:28px;font-weight:900;color:#4f46e5;">${purchasedProducts.length}</div>
+                                <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-top:5px;">منتجات مشتراة</div>
+                            </div>
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);text-align:center;">
+                                <div style="font-size:14px;font-weight:900;color:var(--dark);">${lastOrder ? new Date(lastOrder.date || lastOrder.createdAt).toLocaleDateString('ar-EG') : '—'}</div>
+                                <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-top:5px;">آخر طلب</div>
+                            </div>
+                        </div>
+
+                        <!-- Info + Orders layout -->
+                        <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;">
+                            <!-- Distributor Info Card -->
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);">
+                                <h4 style="margin:0 0 15px 0;font-weight:800;font-size:15px;color:var(--dark);display:flex;align-items:center;gap:8px;">
+                                    <i class="fas fa-user-tie" style="color:var(--primary);"></i> معلومات الموزع
+                                </h4>
+                                <div style="display:flex;flex-direction:column;gap:12px;">
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">الاسم:</span><br><span style="font-weight:800;font-size:14px;">${dist.name}</span></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">رقم الهاتف:</span><br><a href="https://wa.me/${dist.phone.replace(/[^0-9]/g, '')}" target="_blank" style="color:var(--primary);text-decoration:none;font-weight:800;font-size:14px;"><i class="fab fa-whatsapp"></i> ${dist.phone}</a></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">الشركة/العمل:</span><br><span style="font-weight:700;font-size:14px;">${dist.businessName || '—'}</span></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">المدينة:</span><br><span style="font-weight:700;font-size:14px;">${dist.city || '—'}</span></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">العنوان:</span><br><span style="font-weight:700;font-size:14px;">${dist.address || '—'}</span></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">البريد الإلكتروني:</span><br><span style="font-weight:700;font-size:14px;">${dist.email || '—'}</span></div>
+                                    <div><span style="font-weight:700;color:var(--text-muted);font-size:12px;">تاريخ التسجيل:</span><br><span style="font-weight:700;font-size:14px;">${new Date(dist.createdAt).toLocaleDateString('ar-EG')}</span></div>
+                                </div>
+                            </div>
+
+                            <!-- Orders List -->
+                            <div style="background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);">
+                                <h4 style="margin:0 0 15px 0;font-weight:800;font-size:15px;color:var(--dark);display:flex;align-items:center;gap:8px;">
+                                    <i class="fas fa-shopping-bag" style="color:var(--primary);"></i> طلبات الموزع
+                                </h4>
+                                ${distOrders.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;"><i class="fas fa-box-open" style="display:block;font-size:32px;opacity:0.3;margin-bottom:10px;"></i>لا توجد طلبات بعد</div>' : `
+                                    <div style="overflow-x:auto;">
+                                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                                            <thead>
+                                                <tr style="background:var(--gray-100);">
+                                                    <th style="padding:10px;text-align:right;font-size:11px;">#</th>
+                                                    <th style="padding:10px;text-align:right;font-size:11px;">التاريخ</th>
+                                                    <th style="padding:10px;text-align:right;font-size:11px;">المبلغ</th>
+                                                    <th style="padding:10px;text-align:right;font-size:11px;">الحالة</th>
+                                                    <th style="padding:10px;text-align:right;font-size:11px;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${distOrders.slice(0, 50).map(o => {
+                                                    const statusColors = { pending: '#92400e', processing: '#92400e', shipped: '#4f46e5', delivered: '#166534', cancelled: '#991b1b' };
+                                                    const statusLabels = { pending: 'قيد الانتظار', processing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'تم التوصيل', cancelled: 'ملغي' };
+                                                    return `
+                                                        <tr style="border-bottom:1px solid var(--gray-200);cursor:pointer;" onclick="viewOrder('${o.id}')">
+                                                            <td style="padding:10px;font-weight:800;color:var(--primary);">#${o.id}</td>
+                                                            <td style="padding:10px;">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
+                                                            <td style="padding:10px;font-weight:800;">${parseFloat(o.total || 0).toFixed(2)} ₪</td>
+                                                            <td style="padding:10px;">
+                                                                <span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;background:${o.status === 'delivered' ? '#f0fdf4' : o.status === 'cancelled' ? '#fef2f2' : '#fffbeb'};color:${statusColors[o.status] || '#92400e'};">
+                                                                    ${statusLabels[o.status] || o.status}
+                                                                </span>
+                                                            </td>
+                                                            <td style="padding:10px;"><i class="fas fa-chevron-left" style="color:var(--text-muted);font-size:11px;"></i></td>
+                                                        </tr>
+                                                    `;
+                                                }).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Purchased Products -->
+                        <div style="margin-top:20px;background:#fff;padding:20px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow-sm);">
+                            <h4 style="margin:0 0 15px 0;font-weight:800;font-size:15px;color:var(--dark);display:flex;align-items:center;gap:8px;">
+                                <i class="fas fa-shopping-cart" style="color:var(--primary);"></i> المنتجات المشتراة
+                            </h4>
+                            ${purchasedProducts.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;"><i class="fas fa-box-open" style="display:block;font-size:32px;opacity:0.3;margin-bottom:10px;"></i>لم يقم بشراء أي منتجات بعد</div>' : `
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
+                                    ${purchasedProducts.map(p => {
+                                        const variantText = (p.color || p.size) ? `<span style="font-size:10px;color:var(--gray-600);background:#f8fafc;border:1px solid #e2e8f0;padding:1px 6px;border-radius:4px;display:inline-block;">${[p.color, p.size].filter(Boolean).join(' / ')}</span>` : '';
+                                        return `
+                                            <div style="display:flex;align-items:center;gap:12px;background:var(--gray-50);padding:12px;border-radius:12px;border:1px solid var(--gray-200);">
+                                                <img src="${p.image}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23e2e8f0%22 width=%22100%22 height=%22100%22/></svg>'">
+                                                <div style="flex:1;min-width:0;">
+                                                    <div style="font-weight:700;font-size:13px;color:var(--dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</div>
+                                                    ${variantText}
+                                                    <div style="display:flex;gap:12px;margin-top:3px;font-size:11px;color:var(--text-muted);">
+                                                        <span>الكمية: <strong style="color:var(--dark);">${p.quantity}</strong></span>
+                                                        <span>الإجمالي: <strong style="color:var(--primary);">${p.totalSpent.toFixed(2)} ₪</strong></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            } catch(e) {
+                body.innerHTML = '<div style="text-align:center;padding:40px;color:#ef4444;">حدث خطأ أثناء تحميل التفاصيل</div>';
+                console.error(e);
             }
         }
 
@@ -4662,6 +5773,7 @@
                 e.preventDefault();
                 serializeSlider();
                 if(typeof serializeHomeSections === 'function') serializeHomeSections();
+                if(typeof serializeSidebarSections === 'function') serializeSidebarSections();
 
                 const checkboxes = this.querySelectorAll('input[type="checkbox"]');
                 checkboxes.forEach(cb => {
@@ -4683,18 +5795,39 @@
                         // Running as a static file (no server) → save directly to Supabase
                         const formData = new FormData(this);
                         const settings = {};
-                        for (const [k, v] of formData.entries()) settings[k] = v;
+                        for (const [k, v] of formData.entries()) {
+                            if (k.endsWith('[]')) {
+                                if (!Array.isArray(settings[k])) settings[k] = [];
+                                settings[k].push(v);
+                            } else {
+                                settings[k] = v;
+                            }
+                        }
                         await DB.setSettings(settings);
                         if (typeof showToast === 'function') showToast('✅ تم حفظ التغييرات بنجاح!');
                         else alert('✅ تم حفظ التغييرات بنجاح!');
                         // Reload into memory so the builder reflects the saved state
                         const s = await DB.getSettings();
+                        const safeParse = (val) => {
+                            if (!val || typeof val !== 'string') return val;
+                            try { return JSON.parse(val); } catch (e) { return null; }
+                        };
                         if (s.home_sections_json) {
-                            const p = typeof s.home_sections_json === 'string' ? JSON.parse(s.home_sections_json) : s.home_sections_json;
-                            window.homeSections = p;
-                            homeSections = p;
+                            const p = safeParse(s.home_sections_json);
+                            if (p) { window.homeSections = p; homeSections = p; }
                         }
-                        if (typeof renderHomeSections === 'function') renderHomeSections();
+                        if (s.sidebar_sections_json) {
+                            const p2 = safeParse(s.sidebar_sections_json);
+                            if (p2) window.sidebarSections = p2;
+                        }
+                    if (typeof renderHomeSections === 'function') renderHomeSections();
+
+                    if (settings.sidebar_sections_json) {
+                        const parsed = typeof settings.sidebar_sections_json === 'string' ? JSON.parse(settings.sidebar_sections_json) : settings.sidebar_sections_json;
+                        window.sidebarSections = parsed;
+                    }
+                    if (typeof renderSidebarSections === 'function') renderSidebarSections();
+                        if (typeof renderSidebarSections === 'function') renderSidebarSections();
                     } else {
                         this.submit();
                     }
@@ -4731,7 +5864,14 @@
                         // Running as a static file (no server) → save directly to Supabase
                         const formData = new FormData(this);
                         const settings = {};
-                        for (const [k, v] of formData.entries()) settings[k] = v;
+                        for (const [k, v] of formData.entries()) {
+                            if (k.endsWith('[]')) {
+                                if (!Array.isArray(settings[k])) settings[k] = [];
+                                settings[k].push(v);
+                            } else {
+                                settings[k] = v;
+                            }
+                        }
                         await DB.setSettings(settings);
                         if (typeof showToast === 'function') showToast('✅ تم حفظ التغييرات بنجاح!');
                         else alert('✅ تم حفظ التغييرات بنجاح!');
@@ -4766,6 +5906,38 @@
                 });
                 
                 // Handled by first submit handler above - do nothing
+            });
+
+            // Popups Form Submit Handler
+            document.getElementById('popupsForm')?.addEventListener('submit', async function(e) {
+                if (this.dataset.submitting === 'true') return;
+                e.preventDefault();
+                this.dataset.submitting = 'true';
+                try {
+                    if (location.protocol === 'file:') {
+                        const formData = new FormData(this);
+                        const settings = {};
+                        for (const [k, v] of formData.entries()) settings[k] = v;
+                        // Normalize checkbox value: browser sends 'on' for checked
+                        if (settings.popupEnabled === 'on') settings.popupEnabled = 'true';
+                        else if (!settings.popupEnabled) settings.popupEnabled = 'false';
+                        // Map popups_json → popups for _renderWelcomePopup to find
+                        let popupsVal = settings.popups_json;
+                        // If it's somehow an object, stringify it so Supabase stores as text
+                        if (typeof popupsVal === 'object') popupsVal = JSON.stringify(popupsVal);
+                        settings.popups = popupsVal;
+                        settings.popups_json = popupsVal;
+                        if (typeof showToast === 'function') showToast('✅ تم حفظ الحملات المنبثقة بنجاح!');
+                        else alert('✅ تم حفظ الحملات المنبثقة بنجاح!');
+                    } else {
+                        this.submit();
+                    }
+                } catch(err) {
+                    console.error('Save popups error:', err);
+                    alert('حدث خطأ أثناء الحفظ: ' + (err && err.message ? err.message : err));
+                } finally {
+                    this.dataset.submitting = 'false';
+                }
             });
         });
 
@@ -5400,6 +6572,7 @@ window.openProductSelectorModal = async function(cur) {
     } catch(e) {
         console.error(e);
     }
+    window._productSelectorAllProducts = products;
     
     list.innerHTML = '';
     
@@ -5668,27 +6841,36 @@ function initDashboardAudio() {
 });
 
 function playCashRegisterSound() {
+    const soundType = localStorage.getItem('orderSoundType') || 'cashier';
+    const volumePercent = parseInt(localStorage.getItem('orderSoundVolume') || '80');
+    const customData = localStorage.getItem('customOrderSound') || null;
+    playSoundCore(soundType, volumePercent, customData, 'order');
+}
+
+function playDistributorSound() {
+    const soundType = localStorage.getItem('distributorSoundType') || 'bell';
+    const volumePercent = parseInt(localStorage.getItem('orderSoundVolume') || '80');
+    const customData = localStorage.getItem('customDistributorSound') || null;
+    playSoundCore(soundType, volumePercent, customData, 'distributor');
+}
+
+function playSoundCore(soundType, volumePercent, customData, kind) {
     try {
-        const soundType = localStorage.getItem('orderSoundType') || 'cashier';
-        const volumePercent = parseInt(localStorage.getItem('orderSoundVolume') || '80');
         const gainVal = volumePercent / 100;
-        
         if (gainVal <= 0) return; // Silent if volume is 0
-        
+
         // Custom Sound playing logic
         if (soundType === 'custom') {
-            const customSoundData = localStorage.getItem('customOrderSound');
-            if (customSoundData) {
-                const audio = new Audio(customSoundData);
+            if (customData) {
+                const audio = new Audio(customData);
                 audio.volume = gainVal;
                 audio.play().catch(e => console.error("Custom audio play blocked:", e));
                 return;
             } else {
-                // If they selected custom but haven't uploaded yet, fallback to cashier
-                showToast('ℹ️ لم تقم برفع ملف صوتي مخصص بعد. تم استخدام نغمة الكاشير الافتراضية.');
+                showToast(kind === 'distributor' ? 'ℹ️ لم تقم برفع ملف صوتي مخصص للموزعين بعد.' : 'ℹ️ لم تقم برفع ملف صوتي مخصص بعد. تم استخدام النغمة الافتراضية.');
             }
         }
-        
+
         // Initialize or resume global AudioContext
         if (!dashboardAudioCtx) {
             dashboardAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -5696,9 +6878,9 @@ function playCashRegisterSound() {
         if (dashboardAudioCtx.state === 'suspended') {
             dashboardAudioCtx.resume();
         }
-        
+
         const ctx = dashboardAudioCtx;
-        
+
         if (soundType === 'cashier') {
             // Enhanced Real Money Cash Register sound
             // Ring 1: High metallic ping ("cha")
@@ -5915,6 +7097,9 @@ function initSoundSettingsUI() {
         handleSoundSelectionChange();
     }
     
+    const distSelect = document.getElementById('distributorSoundSelect');
+    if (distSelect) distSelect.value = localStorage.getItem('distributorSoundType') || 'bell';
+    
     if (volumeSlider) {
         volumeSlider.value = volume;
     }
@@ -5975,6 +7160,17 @@ function uploadCustomSound(event) {
 function playSelectedTestSound() {
     initDashboardAudio();
     playCashRegisterSound();
+}
+
+function handleDistributorSoundChange() {
+    const select = document.getElementById('distributorSoundSelect');
+    if (!select) return;
+    localStorage.setItem('distributorSoundType', select.value);
+}
+
+function playDistributorTestSound() {
+    initDashboardAudio();
+    playDistributorSound();
 }
 
 function sendTestNotification() {
@@ -7219,6 +8415,19 @@ async function openBannerPresetsModal() {
 
     try {
         allBannerPresets = await DB.getBannerPresets();
+        // Fallback: if DB is empty, use built-in default presets
+        if (!allBannerPresets || allBannerPresets.length === 0) {
+            allBannerPresets = [
+                { id: 'default-luxury', name: 'تصميم فاخر 🌟', category: 'luxury', bgColor: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', textColor: '#ffffff', customCss: 'border:1px solid rgba(255,255,255,0.1);box-shadow:0 20px 40px rgba(0,0,0,0.3);', isDefault: true },
+                { id: 'default-gold', name: 'ذهبي فاخر 💎', category: 'luxury', bgColor: 'linear-gradient(135deg, #78350f 0%, #b45309 50%, #f59e0b 100%)', textColor: '#ffffff', customCss: 'border:1px solid rgba(255,255,255,0.2);box-shadow:0 20px 40px rgba(0,0,0,0.2);', isDefault: true },
+                { id: 'default-minimal-light', name: 'مودرن فاتح ✨', category: 'minimal', bgColor: '#ffffff', textColor: '#0f172a', customCss: 'border:2px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.05);', isDefault: true },
+                { id: 'default-minimal-dark', name: 'مودرن داكن ✨', category: 'minimal', bgColor: '#1e293b', textColor: '#f8fafc', customCss: 'border:2px solid #334155;box-shadow:0 10px 30px rgba(0,0,0,0.2);', isDefault: true },
+                { id: 'default-eid', name: 'عيد مبارك 🎉', category: 'special', bgColor: 'linear-gradient(135deg, #065f46 0%, #059669 50%, #10b981 100%)', textColor: '#ffffff', customCss: 'border:2px solid #34d399;box-shadow:0 15px 35px rgba(16,185,129,0.2);', isDefault: true },
+                { id: 'default-romantic', name: 'رومانسي 💝', category: 'special', bgColor: 'linear-gradient(135deg, #9d174d 0%, #db2777 50%, #f472b6 100%)', textColor: '#ffffff', customCss: 'border:2px solid #f9a8d4;box-shadow:0 15px 35px rgba(219,39,119,0.2);', isDefault: true },
+                { id: 'default-summer', name: 'عروض الصيف ☀️', category: 'special', bgColor: 'linear-gradient(135deg, #0369a1 0%, #0ea5e9 50%, #7dd3fc 100%)', textColor: '#ffffff', customCss: 'border:2px solid #bae6fd;box-shadow:0 15px 35px rgba(14,165,233,0.2);', isDefault: true },
+                { id: 'default-sale', name: 'تخفيضات 🔥', category: 'special', bgColor: 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 50%, #fca5a5 100%)', textColor: '#ffffff', customCss: 'border:2px solid #fecaca;box-shadow:0 15px 35px rgba(220,38,38,0.2);', isDefault: true },
+            ];
+        }
         renderBannerPresets(allBannerPresets);
     } catch (e) {
         grid.innerHTML = '<div style="text-align:center; color:red; padding:20px;">فشل تحميل القوالب</div>';
@@ -7435,9 +8644,16 @@ async function editPromotion(id) {
         }
     }
 
-    // 2. Dates
-    document.getElementById('promoStartDate').value = promo.startDate;
-    document.getElementById('promoEndDate').value = promo.endDate;
+    // 2. Dates — convert ISO to datetime-local format (YYYY-MM-DDThh:mm)
+    const fmtDate = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    document.getElementById('promoStartDate').value = fmtDate(promo.startDate);
+    document.getElementById('promoEndDate').value = fmtDate(promo.endDate);
 
     // 3. Discount
     setDiscountType(promo.discountType);
@@ -7488,13 +8704,22 @@ async function savePromotion() {
         return;
     }
 
-    const startDate = document.getElementById('promoStartDate')?.value;
-    const endDate = document.getElementById('promoEndDate')?.value;
+    let startDate = document.getElementById('promoStartDate')?.value;
+    let endDate = document.getElementById('promoEndDate')?.value;
 
     if (!startDate || !endDate) {
         showToast('⚠️ يرجى تحديد تاريخ البداية والانتهاء', 'error');
         return;
     }
+    // Add local timezone offset so Supabase stores the correct local time
+    const tzOffset = -new Date().getTimezoneOffset();
+    const tzSign = tzOffset >= 0 ? '+' : '-';
+    const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+    const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+    const tzSuffix = tzSign + tzHours + ':' + tzMins;
+    startDate = startDate + ':00' + tzSuffix;
+    endDate = endDate + ':00' + tzSuffix;
+
     if (new Date(endDate) <= new Date(startDate)) {
         showToast('⚠️ تاريخ الانتهاء يجب أن يكون بعد تاريخ البداية', 'error');
         return;
@@ -7513,6 +8738,7 @@ async function savePromotion() {
     const occasionName = selectedOccasionId === 'custom' && customName ? customName : meta.name;
 
     const payload = {
+        id: editingPromoId || undefined,
         occasionId: selectedOccasionId,
         occasionName,
         occasionEmoji: meta.emoji,
@@ -7610,7 +8836,14 @@ async function loadPromotions() {
             } else if (isScheduled) {
                 const msToStart = start - now;
                 const daysToStart = Math.floor(msToStart / (1000 * 60 * 60 * 24));
-                countdownHtml = `<br><span class="promo-countdown" style="background:#dbeafe; color:#1d4ed8;">🕐 يبدأ خلال ${daysToStart} يوم</span>`;
+                const hrsToStart = Math.floor((msToStart % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                if (daysToStart > 0) {
+                    countdownHtml = `<br><span class="promo-countdown" style="background:#dbeafe; color:#1d4ed8;">🕐 يبدأ خلال ${daysToStart} يوم و ${hrsToStart} ساعة</span>`;
+                } else if (hrsToStart > 0) {
+                    countdownHtml = `<br><span class="promo-countdown" style="background:#dbeafe; color:#1d4ed8;">🕐 يبدأ خلال ${hrsToStart} ساعة</span>`;
+                } else {
+                    countdownHtml = `<br><span class="promo-countdown" style="background:#dbeafe; color:#1d4ed8;">🕐 يبدأ خلال أقل من ساعة</span>`;
+                }
             }
 
             return `<tr>
@@ -7752,6 +8985,7 @@ function showReelsList(updateUrl = true) {
     document.getElementById('reelsEditorView').style.display = 'none';
     loadReels();
     loadReelsShuffleSetting();
+    loadReelsEnabledSetting();
 
     if (updateUrl) {
         const newUrl = new URL(window.location);
@@ -7978,6 +9212,30 @@ async function saveReelsShuffleSetting() {
     }
 }
 
+async function loadReelsEnabledSetting() {
+    try {
+        const settings = await DB.getSettings();
+        const toggle = document.getElementById('reelsEnabledToggle');
+        if (toggle) {
+            toggle.checked = settings.reelsEnabled !== false;
+        }
+    } catch (e) {
+        console.error('Error loading reels enabled setting:', e);
+    }
+}
+
+async function saveReelsEnabledSetting() {
+    const toggle = document.getElementById('reelsEnabledToggle');
+    if (!toggle) return;
+    const reelsEnabled = toggle.checked;
+    try {
+        await DB.setSettings({ reelsEnabled });
+        showToast(reelsEnabled ? '✅ تم تفعيل ميزة الريلز للزوار' : '❌ تم إخفاء ميزة الريلز عن الزوار');
+    } catch (e) {
+        showToast('❌ خطأ في الاتصال بالخادم', 'error');
+    }
+}
+
 // Expose to window
 window.loadReels = loadReels;
 window.showReelEditor = showReelEditor;
@@ -7990,6 +9248,8 @@ window.deleteReel = deleteReel;
 window.handleReelDeepLinking = handleReelDeepLinking;
 window.loadReelsShuffleSetting = loadReelsShuffleSetting;
 window.saveReelsShuffleSetting = saveReelsShuffleSetting;
+window.loadReelsEnabledSetting = loadReelsEnabledSetting;
+window.saveReelsEnabledSetting = saveReelsEnabledSetting;
 
 // ─── JSON Import & Export ──────────────────────────────────────────
 function triggerJsonImport() {
@@ -8051,22 +9311,93 @@ function openProductFeedModal() {
     switchTab('tab-marketing-feed');
 }
 
-function copyFeedLink(platform, format = 'csv') {
-    const host = window.location.host;
-    const protocol = window.location.protocol;
-    const link = `${protocol}//${host}/index.html?app=products-feed&platform=${platform}&format=${format}`;
-    
-    navigator.clipboard.writeText(link).then(() => {
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
-            icon: 'success',
-            title: `تم نسخ رابط ${platform.toUpperCase()} (${format.toUpperCase()}) بنجاح!`
-        });
-    });
+async function copyFeedLink(platform, format = 'xml') {
+    // Copy the feed URL to clipboard
+    const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    const feedUrl = `${window.location.origin}${base}index.html?app=products-feed&platform=${platform}&format=${format}`;
+    try {
+        await navigator.clipboard.writeText(feedUrl);
+        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, icon: 'success', title: `تم نسخ رابط ${platform.toUpperCase()} (${format.toUpperCase()})` });
+    } catch {
+        // Fallback: prompt
+        prompt('انسخ الرابط:', feedUrl);
+    }
 }
+
+async function downloadFeed(platform, format = 'csv') {
+    try {
+        const [products, settings] = await Promise.all([DB.getProducts(), DB.getSettings()]);
+        const storeName = settings.storeName || 'Pro Store';
+        const currency = settings.currency || 'ILS';
+        const baseUrl = window.location.origin;
+
+        const escXml = s => String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":"&apos;"}[c]));
+        const escCsv = s => `"${String(s).replace(/"/g, '""')}"`;
+
+        let content, filename, mime;
+
+        if (format === 'xml') {
+            let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">\n<channel>\n<title>${escXml(storeName)}</title>\n<link>${baseUrl}</link>\n<description>Product feed for ${escXml(storeName)}</description>\n`;
+            products.forEach(p => {
+                if (p.advanced && p.advanced.hiddenProduct) return;
+                xml += `<item>\n<g:id>${escXml(p.id)}</g:id>\n<g:title>${escXml(p.name)}</g:title>\n<g:description>${escXml((p.description || '').replace(/<[^>]*>/g, '').substring(0, 5000))}</g:description>\n<g:link>${baseUrl}/index.html#?product=${p.id}</g:link>\n<g:image_link>${escXml(p.image || '')}</g:image_link>\n<g:availability>in stock</g:availability>\n<g:price>${p.price} ${currency}</g:price>${p.salePrice ? `\n<g:sale_price>${p.salePrice} ${currency}</g:sale_price>` : ''}\n<g:brand>${escXml(storeName)}</g:brand>\n<g:condition>new</g:condition>\n</item>\n`;
+            });
+            xml += `</channel>\n</rss>`;
+            content = xml;
+            filename = `products_feed_${platform}.xml`;
+            mime = 'application/xml';
+        } else {
+            let csv = '';
+            if (platform === 'google') {
+                csv = 'id,title,description,link,image_link,availability,price,brand,condition,google_product_category\n';
+                products.forEach(p => {
+                    if (p.advanced && p.advanced.hiddenProduct) return;
+                    csv += `${p.id},${escCsv(p.name)},${escCsv((p.description || '').replace(/<[^>]*>/g, '').substring(0, 5000))},${baseUrl}/index.html#?product=${p.id},${p.image},in stock,${p.price} ${currency},"${escCsv(storeName)}",new,\n`;
+                });
+            } else if (platform === 'snapchat') {
+                csv = 'id,title,description,link,image_link,availability,price,brand,condition,item_group_id\n';
+                products.forEach(p => {
+                    if (p.advanced && p.advanced.hiddenProduct) return;
+                    csv += `${p.id},${escCsv(p.name)},${escCsv((p.description || '').replace(/<[^>]*>/g, '').substring(0, 500))},${baseUrl}/index.html#?product=${p.id},${p.image},in stock,${p.price} ${currency},"${escCsv(storeName)}",new,${p.category || 'all'}\n`;
+                });
+            } else if (platform === 'tiktok') {
+                csv = 'sku_id,title,description,product_link,image_link,stock,price,sale_price,category_id\n';
+                products.forEach(p => {
+                    if (p.advanced && p.advanced.hiddenProduct) return;
+                    csv += `${p.id},${escCsv(p.name)},${escCsv((p.description || '').replace(/<[^>]*>/g, ''))},${baseUrl}/index.html#?product=${p.id},${p.image},999,${p.price} ${currency},${p.salePrice || ''},${p.category || '0'}\n`;
+                });
+            } else {
+                csv = 'id,title,description,link,image_link,availability,price,sale_price,brand,condition\n';
+                products.forEach(p => {
+                    if (p.advanced && p.advanced.hiddenProduct) return;
+                    csv += `${p.id},${escCsv(p.name)},${escCsv((p.description || '').replace(/<[^>]*>/g, '').substring(0, 5000))},${baseUrl}/index.html#?product=${p.id},${p.image},in stock,${p.price} ${currency},${p.salePrice ? p.salePrice + ' ' + currency : ''},"${escCsv(storeName)}",new\n`;
+                });
+            }
+            content = '\uFEFF' + csv;
+            filename = `products_feed_${platform}.csv`;
+            mime = 'text/csv';
+        }
+
+        const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, icon: 'success', title: `تم تحميل ملف ${filename}` });
+    } catch (e) {
+        console.error('Feed generation error:', e);
+        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, icon: 'error', title: 'حدث خطأ أثناء إنشاء الملف' });
+    }
+}
+
+window.openProductFeedModal = openProductFeedModal;
+window.copyFeedLink = copyFeedLink;
+window.downloadFeed = downloadFeed;
 
 window.openProductFeedModal = openProductFeedModal;
 window.copyFeedLink = copyFeedLink;
@@ -8076,8 +9407,12 @@ let popupCampaigns = [];
 
 function initPopupsManager() {
     try {
-        const json = document.getElementById('popups_json_input').value;
-        popupCampaigns = json ? JSON.parse(json) : [];
+        const input = document.getElementById('popups_json_input');
+        let json = input ? input.value : '[]';
+        // If the value is already an object (e.g. from Supabase JSONB auto-parse), stringify it
+        if (typeof json === 'object') json = JSON.stringify(json);
+        const parsed = json ? JSON.parse(json) : [];
+        popupCampaigns = parsed;
         renderPopupsList();
     } catch(e) {
         console.error('Popups Init Error:', e);
@@ -8256,6 +9591,17 @@ function addNewPopupCampaign() {
         timerMinutes: 10
     });
     renderPopupsList();
+    syncPopupsJSON();
+    // Scroll to the new campaign card
+    setTimeout(() => {
+        const cards = document.querySelectorAll('#popupsListContainer > div');
+        if (cards.length) {
+            cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cards[cards.length - 1].style.border = '2px solid #10b981';
+            cards[cards.length - 1].style.boxShadow = '0 0 0 3px rgba(16,185,129,0.2)';
+        }
+    }, 200);
+    if (typeof showToast === 'function') showToast('✅ تمت إضافة حملة منبثقة جديدة — عدّل البيانات من الأسفل');
 }
 
 function updatePopupData(index, field, value) {
@@ -8263,8 +9609,8 @@ function updatePopupData(index, field, value) {
     syncPopupsJSON();
 }
 
-function deletePopupCampaign(index) {
-    Swal.fire({
+async function deletePopupCampaign(index) {
+    const result = await Swal.fire({
         title: 'هل أنت متأكد؟',
         text: "سيتم حذف هذه الحملة المنبثقة نهائياً!",
         icon: 'warning',
@@ -8272,12 +9618,23 @@ function deletePopupCampaign(index) {
         confirmButtonColor: '#ef4444',
         confirmButtonText: 'نعم، احذف',
         cancelButtonText: 'إلغاء'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            popupCampaigns.splice(index, 1);
-            renderPopupsList();
-        }
     });
+    if (!result.isConfirmed) return;
+    popupCampaigns.splice(index, 1);
+    renderPopupsList();
+    syncPopupsJSON();
+    // Auto-save to Supabase
+    try {
+        const settings = { popups_json: document.getElementById('popups_json_input').value };
+        let popupsVal = settings.popups_json;
+        if (typeof popupsVal === 'object') popupsVal = JSON.stringify(popupsVal);
+        settings.popups = popupsVal;
+        settings.popups_json = popupsVal;
+        await DB.setSettings(settings);
+        if (typeof showToast === 'function') showToast('🗑️ تم حذف الحملة وحفظ التغييرات');
+    } catch(e) {
+        console.error('Auto-save after delete failed:', e);
+    }
 }
 
 function triggerPopupUpload(index) {
@@ -8475,13 +9832,6 @@ function printOrderInvoice() {
     `);
     printWindow.document.close();
 }
-
-// Ensure init on tab switch or load
-document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('popups_json_input')) {
-        initPopupsManager();
-    }
-});
 
 window.addNewPopupCampaign = addNewPopupCampaign;
 window.deletePopupCampaign = deletePopupCampaign;

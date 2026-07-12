@@ -76,14 +76,36 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function addToCart(id, name, price, image, color, size) {
+    let isWholesale = false;
+    // Override price with wholesale price if logged in as a distributor/merchant
+    if (window.wholesalePrices && window.wholesalePrices[id]) {
+        isWholesale = true;
+        const product = window.StoreInit && Array.isArray(window.StoreInit.products) 
+            ? window.StoreInit.products.find(p => String(p.id) === String(id)) 
+            : null;
+        
+        if (product) {
+            const retailPrice = parseFloat(product.price);
+            const salePrice = product.salePrice ? parseFloat(product.salePrice) : null;
+            if (price === retailPrice || (salePrice && price === salePrice)) {
+                price = parseFloat(window.wholesalePrices[id]);
+            }
+        } else {
+            const wsPrice = parseFloat(window.wholesalePrices[id]);
+            if (price > wsPrice) {
+                price = wsPrice;
+            }
+        }
+    }
     let cart = getCart();
     let existingItem = cart.find(item => item.id === id && item.color === color && item.size === size);
     
     if (existingItem) {
         existingItem.quantity += 1;
+        if (isWholesale) existingItem.isWholesale = true;
         playQuantitySound();
     } else {
-        cart.push({ id, name, price, image, color, size, quantity: 1 });
+        cart.push({ id, name, price, image, color, size, quantity: 1, isWholesale });
         playAddToCartSound();
     }
     
@@ -98,18 +120,25 @@ function addToCart(id, name, price, image, color, size) {
 }
 
 function updateCartUI() {
+    let cart = getCart();
+    let total = cart.reduce((sum, item) => sum + item.quantity, 0);
     const cartCountEl = document.getElementById('cart-count');
-    if(cartCountEl) {
-        let cart = getCart();
-        let total = cart.reduce((sum, item) => sum + item.quantity, 0);
-        cartCountEl.innerText = total;
+    if(cartCountEl) cartCountEl.innerText = total;
+    document.querySelectorAll('.cart-count').forEach(el => { el.textContent = total; });
+    if (typeof updateFloatingCartBar === 'function') {
+        updateFloatingCartBar();
     }
     updateFavUI();
 }
 
 // Wishlist Logic
 function getFavorites() {
-    return JSON.parse(localStorage.getItem('wishlist')) || [];
+    let list = JSON.parse(localStorage.getItem('wishlist')) || [];
+    return list.filter(item => {
+        if (!item) return false;
+        const id = typeof item === 'string' ? item : item.id;
+        return id && id !== 'undefined';
+    });
 }
 
 function saveFavorites(wishlist) {
@@ -118,6 +147,7 @@ function saveFavorites(wishlist) {
 }
 
 function toggleFavorite(id, name, price, image) {
+    if (!id || id === 'undefined') return;
     let wishlist = getFavorites();
     let index = wishlist.findIndex(item => item.id === id);
     
@@ -127,7 +157,28 @@ function toggleFavorite(id, name, price, image) {
         wishlist.splice(index, 1);
         showToast('تمت إزالة المنتج من المفضلة 💔');
     } else {
-        wishlist.push({ id, name, price, image });
+        let isWholesale = false;
+        if (window.wholesalePrices && window.wholesalePrices[id]) {
+            isWholesale = true;
+            const product = window.StoreInit && Array.isArray(window.StoreInit.products) 
+                ? window.StoreInit.products.find(p => String(p.id) === String(id)) 
+                : null;
+            if (product) {
+                name = product.name;
+                image = product.image;
+                price = parseFloat(window.wholesalePrices[id]);
+            } else {
+                price = parseFloat(window.wholesalePrices[id]);
+            }
+        } else if (!name && window.StoreInit && Array.isArray(window.StoreInit.products)) {
+            const p = window.StoreInit.products.find(prod => String(prod.id) === String(id));
+            if (p) {
+                name = p.name;
+                price = p.price;
+                image = p.image;
+            }
+        }
+        wishlist.push({ id, name: name || 'منتج', price: price || 0, image: image || '', isWholesale });
         showToast('تمت إضافة المنتج للمفضلة ❤️');
     }
     
@@ -140,7 +191,7 @@ function toggleFavorite(id, name, price, image) {
                          btn.classList.contains('rec-sl-fav');
         
         if (isFavBtn) {
-            const isInWishlist = wishlist.some(item => item.id === id);
+            const isInWishlist = wishlist.some(item => String(item.id) === String(id));
             btn.classList.toggle('active', isInWishlist);
             const icon = btn.querySelector('i');
             if (icon) {
@@ -174,7 +225,7 @@ function updateFavUI() {
         }
 
         if (id) {
-            const isInWishlist = wishlist.some(item => item.id === id);
+            const isInWishlist = wishlist.some(item => String(item.id) === String(id));
             btn.classList.toggle('active', isInWishlist);
             const icon = btn.querySelector('i');
             if (icon) {

@@ -105,6 +105,7 @@
             const m = document.getElementById(id);
             if (m) m.classList.add('active');
             if (id === 'wishlistModal') renderWishlistModal();
+            if (id === 'cartModal') renderCartModal();
         }
         function closeModal(id) {
             const m = document.getElementById(id);
@@ -202,6 +203,7 @@
                 document.getElementById('cartStepItems').style.display = 'block';
                 document.getElementById('cartStepCheckout').style.display = 'none';
                 document.getElementById('cartStepPayment').style.display = 'none';
+                recalculateCartTotals();
                 return;
             }
             container.innerHTML = cart.map((item, i) => `
@@ -209,7 +211,7 @@
                     <img src="${item.image || ''}" style="width:65px; height:65px; border-radius:10px; object-fit:cover;">
                     <div style="flex:1;">
                         <h4 style="font-weight:800; font-size:14px; margin:0 0 5px 0;">${item.name}</h4>
-                        <p style="color:var(--primary); font-weight:800; margin:0;">${item.price} ₪</p>
+                        <p style="color:var(--primary); font-weight:800; margin:0;">${item.price} ₪ ${item.isWholesale ? '<span style="font-size:11px; font-weight:bold; color:#10b981; background:#10b98115; padding:2px 6px; border-radius:4px; margin-right:5px; display:inline-block; vertical-align:middle;">جملة</span>' : ''}</p>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <button onclick="updateCartQuantity(${i}, -1)" style="width:30px; height:30px; border-radius:8px; border:1px solid var(--gray-200); background:white; cursor:pointer; font-weight:800;">-</button>
@@ -297,8 +299,8 @@
             const checkedRegion = document.querySelector('input[name="custRegion"]:checked');
             const regionName = checkedRegion ? checkedRegion.value : 'الضفة';
             const matchedCity = cities.find(c => c.name === regionName);
-            const shipping = matchedCity ? parseInt(matchedCity.price) : 20;
-            const finalTotal = Math.max(0, subTotal - discount + shipping);
+            const shipping = subTotal > 0 ? (matchedCity ? parseInt(matchedCity.price) : 20) : 0;
+            const finalTotal = subTotal > 0 ? Math.max(0, subTotal - discount + shipping) : 0;
             document.getElementById('shippingTotalLabel').innerText = shipping + ' ₪';
             document.getElementById('finalTotalLabel').innerText = finalTotal.toFixed(2);
         }
@@ -307,6 +309,29 @@
             if (getCart().length === 0) return;
             document.getElementById('cartStepItems').style.display = 'none';
             document.getElementById('cartStepCheckout').style.display = 'block';
+
+            // Auto-fill for logged-in distributors
+            const distName = localStorage.getItem('distributorName');
+            const distPhone = localStorage.getItem('distributorPhone');
+            const distCity = localStorage.getItem('distributorCity');
+            const distAddress = localStorage.getItem('distributorAddress');
+            if (distName) {
+                const nameEl = document.getElementById('custName');
+                if (nameEl && !nameEl.value) nameEl.value = distName;
+            }
+            if (distPhone) {
+                const phoneEl = document.getElementById('custPhone');
+                if (phoneEl && !phoneEl.value) phoneEl.value = distPhone;
+            }
+            if (distCity) {
+                const cityEl = document.getElementById('custCityName');
+                if (cityEl && !cityEl.value) cityEl.value = distCity;
+            }
+            if (distAddress) {
+                const addrEl = document.getElementById('custAddress');
+                if (addrEl && !addrEl.value) addrEl.value = distAddress;
+            }
+
             try {
                 const cart = getCart();
                 const sessionId = localStorage.getItem('store_session_id') || (() => {
@@ -346,7 +371,13 @@
                 const coupon = coupons && coupons[0];
                 if (coupon) {
                     if (coupon.max_uses > 0 && coupon.used_count >= coupon.max_uses) {
-                        showToast('هذا الكوبون استُنفد بالفعل');
+                        if (input) { input.style.borderColor = '#ef4444'; input.style.backgroundColor = '#fef2f2'; }
+                        if (feedback) {
+                            feedback.style.display = 'flex';
+                            feedback.style.color = '#ef4444';
+                            feedback.style.background = '#fef2f2';
+                            feedback.innerHTML = '<span><i class="fas fa-times-circle"></i> هذا الكوبون استُنفد بالفعل</span>';
+                        }
                         return;
                     }
                     const cart = getCart();
@@ -382,6 +413,8 @@
                 btn.style.backgroundColor = 'var(--dark)';
                 feedback.style.display = 'none';
                 feedback.innerHTML = '';
+                feedback.style.color = '#10b981';
+                feedback.style.background = '#e6f4ea';
             }
             showToast('تم إلغاء كود الخصم');
         }
@@ -557,6 +590,9 @@
 
                 const result = await DB.createOrder(orderData);
                 if (result) {
+                    if (couponCode) {
+                        DB.incrementCouponUsage(couponCode).catch(() => {});
+                    }
                     playSuccessSound();
                     launchConfetti();
                     if (typeof window.trackStoreEvent === 'function') {
@@ -569,8 +605,9 @@
                             localStorage.removeItem('store_session_id');
                         }
                     } catch(e) {}
-                    const storePhone = window.storePhone || '970599000000';
-                    const whatsappMsg = `مرحباً، لدي استفسار بخصوص طلبي رقم ${result.id} بقيمة ${finalTotalVal} ₪.`;
+                    const storePhone = String(window.storePhone || '970599000000');
+                    const orderId = typeof result === 'string' ? result : (result.id || result);
+                    const whatsappMsg = `مرحباً، لدي استفسار بخصوص طلبي رقم ${orderId} بقيمة ${finalTotalVal} ₪.`;
                     const whatsappLink = `https://wa.me/${storePhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(whatsappMsg)}`;
                     localStorage.removeItem('cart');
                     if (document.getElementById('cart-count')) document.getElementById('cart-count').innerText = '0';
@@ -600,31 +637,64 @@
                 }
             } catch (err) {
                 console.error("Checkout Error:", err);
-                alert('فشل الاتصال. يرجى التحقق من اتصالك بالإنترنت وإعادة المحاولة.');
+                alert('حدث خطأ أثناء تقديم الطلب: ' + (err.message || 'يرجى المحاولة مرة أخرى'));
                 if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalBtnHtml; }
             }
             return false;
         }
 
         function renderWishlistModal() {
-            const favs = getFavorites();
+            let favs = getFavorites();
             const body = document.getElementById('wishlistBody');
             if(!body) return;
+            
+            // Self-heal legacy formats or incomplete objects
+            favs = favs.map(item => {
+                if (!item) return null;
+                const itemId = typeof item === 'string' ? item : item.id;
+                let itemName = typeof item === 'object' ? item.name : '';
+                let itemPrice = typeof item === 'object' ? item.price : '';
+                let itemImage = typeof item === 'object' ? item.image : '';
+                let itemIsWholesale = (typeof item === 'object' ? item.isWholesale : false) || !!(window.wholesalePrices && window.wholesalePrices[itemId]);
+
+                if (window.wholesalePrices && window.wholesalePrices[itemId]) {
+                    itemPrice = parseFloat(window.wholesalePrices[itemId]);
+                }
+
+                if (!itemName && window.StoreInit && Array.isArray(window.StoreInit.products)) {
+                    const p = window.StoreInit.products.find(prod => String(prod.id) === String(itemId));
+                    if (p) {
+                        itemName = p.name;
+                        if (!window.wholesalePrices || !window.wholesalePrices[itemId]) {
+                            itemPrice = p.price;
+                        }
+                        itemImage = p.image;
+                    }
+                }
+                return {
+                    id: itemId,
+                    name: itemName || 'منتج',
+                    price: itemPrice || 0,
+                    image: itemImage || '',
+                    isWholesale: itemIsWholesale
+                };
+            }).filter(Boolean);
+
             if(favs.length === 0) {
                 body.innerHTML = '<div class="empty-state" style="padding:40px 0;"><i class="fa fa-heart" style="opacity:0.2;"></i><p>قائمة المفضلة فارغة</p></div>';
                 return;
             }
-            body.innerHTML = favs.map(item => `
+             body.innerHTML = favs.map(item => `
                 <div class="modal-item" style="display:flex; align-items:center;">
                     <a href="#?product=${item.id}" onclick="closeModal('wishlistModal')" style="display:flex; flex:1; align-items:center; gap:15px; text-decoration:none; color:inherit;">
                         <img src="${item.image}" style="width:60px; height:60px; border-radius:10px; object-fit:cover;">
                         <div class="modal-item-info">
                             <div class="modal-item-name" style="font-size:14px; font-weight:700;">${item.name}</div>
-                            <div class="modal-item-price" style="font-size:14px; color:var(--primary); font-weight:800;">${item.price}</div>
+                            <div class="modal-item-price" style="font-size:14px; color:var(--primary); font-weight:800;">${item.price} ₪ ${item.isWholesale ? '<span style="font-size:10px; font-weight:bold; color:#10b981; background:#10b98115; padding:2px 5px; border-radius:4px; margin-right:4px; display:inline-block; vertical-align:middle;">جملة</span>' : ''}</div>
                         </div>
                     </a>
                     <div style="display:flex; gap:10px;">
-                        <button class="cart-icon-btn" onclick="addToCart('${item.id}', '${item.name}', ${item.price}, '${item.image}'); closeModal('wishlistModal');"><i class="fa fa-shopping-bag"></i></button>
+                        <button class="cart-icon-btn" onclick="addToCart('${item.id}', '${item.name.replace(/'/g, "\\'")}', ${item.price}, '${item.image}'); closeModal('wishlistModal');"><i class="fa fa-shopping-bag"></i></button>
                         <button style="background:none; border:none; color:#f43f5e; cursor:pointer; font-size:16px;" onclick="toggleFavorite('${item.id}'); renderWishlistModal();"><i class="fa fa-trash-alt"></i></button>
                     </div>
                 </div>
@@ -724,6 +794,7 @@
                     }
                     if (typeof closeModal === 'function') closeModal('distributorModal');
                     showAdminDashboard();
+                    updateProfileDropdown();
                     return;
                 }
 
@@ -788,6 +859,7 @@
                     return;
                 }
                 await DB.supabase.from('distributors').insert({
+                    id: 'DIST-' + Date.now(),
                     name, phone, password, city, address, status: 'pending'
                 });
                 document.getElementById('distRegForm').style.display = 'none';
@@ -864,7 +936,16 @@
                 const { data: products } = await DB.supabase.from('products').select('*');
                 const { data: wholesalePrices } = await DB.supabase.from('wholesale_prices').select('*').eq('phone', phone);
                 const pricesMap = {};
-                (wholesalePrices || []).forEach(wp => { pricesMap[wp.product_id] = wp.wholesale_price; });
+                (products || []).forEach(p => {
+                    if (p.wholesale_price !== undefined && p.wholesale_price !== null && parseFloat(p.wholesale_price) > 0) {
+                        pricesMap[p.id] = p.wholesale_price;
+                    }
+                });
+                (wholesalePrices || []).forEach(wp => {
+                    if (wp.wholesale_price !== undefined && wp.wholesale_price !== null && parseFloat(wp.wholesale_price) > 0) {
+                        pricesMap[wp.product_id] = wp.wholesale_price;
+                    }
+                });
                 const wholesaleItems = (products || []).filter(p => pricesMap[p.id]);
                 if(wholesaleItems.length === 0) {
                     grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:30px; border:1px dashed var(--gray-400); border-radius:15px; color:var(--gray-600);">لا توجد منتجات جملة مخصصة لك حالياً.</div>';
@@ -911,7 +992,54 @@
             }
         }
 
+        function updateProfileDropdown() {
+            const wrap = document.getElementById('distProfileWrap');
+            const items = document.getElementById('profileDropdownItems');
+            const mobileIcon = document.getElementById('distProfileIconMobile');
+            if (!wrap || !items) return;
+            const isAdmin = localStorage.getItem('admin_logged') === 'true';
+            const isDist = localStorage.getItem('distributorPhone') && localStorage.getItem('distributorId');
+            const show = isDist || isAdmin;
+            wrap.style.display = show ? '' : 'none';
+            if (mobileIcon) mobileIcon.style.display = show ? '' : 'none';
+            let html = '';
+            if (isDist) {
+                html += `<a href="javascript:void(0)" onclick="window.openDistributorPortal();closeProfileDropdown()"><i class="fa fa-user-tie"></i> الملف الشخصي</a>`;
+            }
+            if (isAdmin) {
+                html += `<a href="dashboard.html"><i class="fa fa-shield-halved"></i> لوحة التحكم</a>`;
+            }
+            if (isDist || isAdmin) {
+                html += `<div class="dropdown-divider"></div><a href="javascript:void(0)" onclick="distLogout();closeProfileDropdown()" style="color:#ef4444;"><i class="fa fa-sign-out-alt"></i> خروج</a>`;
+            }
+            if (!isDist && !isAdmin) {
+                html += `<a href="javascript:void(0)" onclick="openModal('distributorModal');closeProfileDropdown()"><i class="fa fa-sign-in-alt"></i> تسجيل الدخول</a>`;
+            }
+            items.innerHTML = html;
+        }
+
+        function toggleProfileDropdown(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('profileDropdown');
+            if (!dd) return;
+            updateProfileDropdown();
+            dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function closeProfileDropdown() {
+            const dd = document.getElementById('profileDropdown');
+            if (dd) dd.style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            const dd = document.getElementById('profileDropdown');
+            const wrap = document.getElementById('distProfileWrap');
+            if (dd && wrap && !wrap.contains(e.target)) dd.style.display = 'none';
+        });
+
         async function checkDistributorSession(showDashboard = true) {
+            console.log('🔍 checkDistributorSession fired. admin_logged:', localStorage.getItem('admin_logged'), 'distPhone:', localStorage.getItem('distributorPhone'), 'distId:', localStorage.getItem('distributorId'));
+            updateProfileDropdown();
             // Check admin session first
             if (localStorage.getItem('admin_logged') === 'true') {
                 if (showDashboard) showAdminDashboard();
@@ -922,25 +1050,52 @@
             if (!phone || !id) return;
             // Best-effort: apply wholesale prices if available (non-blocking, no UI change)
             try {
-                const { data: dist } = await DB.supabase.from('distributors').select('*').eq('id', id).single();
-                if (dist && dist.status === 'approved') {
-                    const { data: wholesalePrices } = await DB.supabase.from('wholesale_prices').select('*').eq('phone', phone);
-                    const pricesMap = {};
-                    (wholesalePrices || []).forEach(wp => { pricesMap[wp.product_id] = wp.wholesale_price; });
-                    if (Object.keys(pricesMap).length > 0) {
-                        document.querySelectorAll('.product-price .current-price').forEach(el => {
-                            const card = el.closest('.product-card');
-                            if (card) {
-                                const pid = card.getAttribute('data-product-id') || card.querySelector('[onclick*="addToCart"]')?.getAttribute('onclick')?.match(/'(\d+)'/)?.[1];
-                                if (pid && pricesMap[pid]) {
-                                    el.dataset.originalPrice = parseFloat(el.innerText.replace(/[^0-9.]/g, ''));
-                                    el.dataset.wholesalePrice = pricesMap[pid];
-                                    el.style.color = '#10b981';
-                                    el.style.fontWeight = '900';
-                                }
+                let pricesMap = window.wholesalePrices;
+                if (!pricesMap) {
+                    const { data: dist } = await DB.supabase.from('distributors').select('id, status').eq('id', id).single();
+                    if (dist && dist.status === 'approved') {
+                        pricesMap = {};
+                        const { data: products } = await DB.supabase.from('products').select('id, wholesale_price');
+                        (products || []).forEach(p => {
+                            if (p.wholesale_price !== undefined && p.wholesale_price !== null && parseFloat(p.wholesale_price) > 0) {
+                                pricesMap[p.id] = p.wholesale_price;
                             }
                         });
+                        const { data: wholesalePrices } = await DB.supabase.from('wholesale_prices').select('*').eq('phone', phone);
+                        (wholesalePrices || []).forEach(wp => {
+                            if (wp.wholesale_price !== undefined && wp.wholesale_price !== null && parseFloat(wp.wholesale_price) > 0) {
+                                pricesMap[wp.product_id] = wp.wholesale_price;
+                            }
+                        });
+                        window.wholesalePrices = pricesMap;
                     }
+                }
+                 if (pricesMap && Object.keys(pricesMap).length > 0) {
+                    const priceEls = document.querySelectorAll('.product-price .current-price');
+                    priceEls.forEach(el => {
+                        const card = el.closest('.product-card');
+                        if (card) {
+                            const pid = card.getAttribute('data-product-id') || card.querySelector('[onclick*="addToCart"]')?.getAttribute('onclick')?.match(/'(\d+)'/)?.[1];
+                            if (pid && pricesMap[pid]) {
+                                const priceContainer = el.closest('.product-price');
+                                if (priceContainer && !priceContainer.getAttribute('data-wholesale-applied')) {
+                                    const oldPriceVal = parseFloat(el.innerText.replace(/[^0-9.]/g, ''));
+                                    if (!isNaN(oldPriceVal)) {
+                                        const currency = el.innerText.replace(/[0-9. \t\r\n]/g, '') || '₪';
+                                        priceContainer.setAttribute('data-wholesale-applied', 'true');
+                                        priceContainer.innerHTML = `
+                                            <span class="current-price" style="color:#10b981; font-weight:800; font-size:14px; display:inline-flex; align-items:center; gap:3px;">
+                                                <i class="fas fa-tags" style="font-size:10px;"></i> جملة: ${currency}${parseFloat(pricesMap[pid]).toFixed(2)}
+                                            </span>
+                                            <span class="old-price" style="text-decoration:line-through; color:var(--gray-400); font-size:11px; font-weight:700;">
+                                                ${currency}${oldPriceVal.toFixed(2)}
+                                            </span>
+                                        `;
+                                    }
+                                }
+                            }
+                        }
+                    });
                 }
             } catch(e) { console.warn('Wholesale price load skipped:', e.message); }
             // Only show the dashboard UI when explicitly requested
@@ -955,7 +1110,10 @@
         }
 
         // Exposed so the store can re-apply wholesale pricing after rendering products
-        window.applyDistributorPricing = function() { checkDistributorSession(false); };
+        window.applyDistributorPricing = function() {
+            checkDistributorSession(false);
+            if (typeof updateFavUI === 'function') updateFavUI();
+        };
 
         // Open the distributor portal: show dashboard if logged in, else login modal
         window.openDistributorPortal = function() {
@@ -992,8 +1150,17 @@
             const cart = getCart();
             const bar = document.getElementById('floatingCartBar');
             if (!bar) return;
-            if (cart.length === 0) { bar.style.display = 'none'; return; }
+            if (cart.length === 0) {
+                bar.classList.remove('visible');
+                setTimeout(() => {
+                    if (!bar.classList.contains('visible')) bar.style.display = 'none';
+                }, 300);
+                return;
+            }
             bar.style.display = 'flex';
+            setTimeout(() => {
+                bar.classList.add('visible');
+            }, 50);
             const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
             const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             document.getElementById('floatingCartCount').innerText = totalItems;
@@ -1100,7 +1267,7 @@
             const reelIds = reels.map(r => r.id);
             const hasNew = reelIds.some(id => !seenReels.includes(id));
             const urlParams = new URLSearchParams(window.location.search);
-            const isReelsPage = urlParams.get('app') === 'reels';
+            const isReelsPage = urlParams.get('app') === 'reels' || window.location.hash.includes('app=reels');
             if (hasNew) {
                 if (notification) notification.style.display = 'block';
                 if (toast && !isReelsPage) {
@@ -1122,9 +1289,19 @@
         if (event) { event.preventDefault(); event.stopPropagation(); }
         const toast = document.getElementById('newReelFloatingToast');
         if (toast) { toast.classList.remove('show'); setTimeout(() => toast.style.display = 'none', 500); }
+        // Mark all current reels as seen so the toast doesn't reappear on next load
+        DB.getReels().then(reels => {
+            if (reels && reels.length) {
+                localStorage.setItem('seenReels', JSON.stringify(reels.map(r => r.id)));
+            }
+        }).catch(() => {});
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', checkNewReels);
     else checkNewReels();
+
+    // Show profile icon if distributor is already logged in
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { if (typeof updateProfileDropdown === 'function') updateProfileDropdown(); });
+    else if (typeof updateProfileDropdown === 'function') updateProfileDropdown();
 
     function scrollReels(direction) {
         const container = document.getElementById('reels-container');

@@ -225,7 +225,14 @@ const DB = (() => {
     // ── Orders ────────────────────────────────────────────────────────────
     async getOrders() {
       const { data, error } = await sb().from('orders').select('*').order('date', { ascending: false });
-      if (error) { console.error('getOrders:', error); return []; }
+      if (error) {
+        alert('Supabase getOrders Error: ' + JSON.stringify(error));
+        console.error('getOrders:', error);
+        return [];
+      }
+      if (data) {
+        console.log('Fetched orders count:', data.length);
+      }
       return data.map(r => {
         const o = fromRow(r, ORDER_MAP);
         o.id = String(o.id);
@@ -240,11 +247,21 @@ const DB = (() => {
     },
 
     async saveOrder(order) {
-      const row = toRow(order, ORDER_MAP);
-      row.id = String(row.id || 'ORD-' + Date.now());
-      if (!row.date) row.date = new Date().toISOString();
-      const { error } = await sb().from('orders').upsert(row, { onConflict: 'id' });
-      if (error) { console.error('saveOrder:', error); return null; }
+      if (!sb()) { console.error('saveOrder: Supabase client not initialized'); return null; }
+      const allowed = [
+        'id', 'date', 'customer', 'items', 'total', 'shipping_cost', 'discount',
+        'coupon_code', 'notes', 'status', 'is_wholesale', 'distributor_id',
+        'stock_subtracted', 'created_at', 'updated_at'
+      ];
+      const fullRow = toRow(order, ORDER_MAP);
+      fullRow.id = String(fullRow.id || 'ORD-' + Date.now());
+      if (!fullRow.date) fullRow.date = new Date().toISOString();
+      const row = {};
+      for (const k of allowed) {
+        if (fullRow[k] !== undefined) row[k] = fullRow[k];
+      }
+      const { data, error } = await sb().from('orders').upsert(row, { onConflict: 'id' }).select();
+      if (error) { console.error('saveOrder:', error.message, error.details, error.hint); return null; }
       return row.id;
     },
 
@@ -297,6 +314,15 @@ const DB = (() => {
     async deleteCoupon(code) {
       const { error } = await sb().from('coupons').delete().eq('code', code.toUpperCase());
       if (error) { console.error('deleteCoupon:', error); return false; }
+      return true;
+    },
+
+    async incrementCouponUsage(code) {
+      const { data, error: fetchErr } = await sb().from('coupons').select('used_count').eq('code', code.toUpperCase()).single();
+      if (fetchErr || !data) return false;
+      const newCount = (data.used_count || 0) + 1;
+      const { error } = await sb().from('coupons').update({ used_count: newCount }).eq('code', code.toUpperCase());
+      if (error) { console.error('incrementCouponUsage:', error); return false; }
       return true;
     },
 
@@ -464,7 +490,7 @@ const DB = (() => {
     async saveNotification(notif) {
       const row = toRow(notif, NOTIF_MAP);
       row.id = row.id || Date.now();
-      row.sent_at = row.sent_at || new Date().toISOString();
+      row.sent_at = new Date().toISOString();
       const { error } = await sb().from('notifications').upsert(row, { onConflict: 'id' });
       if (error) { console.error('saveNotification:', error); return false; }
       return true;
@@ -489,25 +515,28 @@ const DB = (() => {
     },
 
     async trackEvent(eventName) {
-      const allowed = ['visit', 'add_to_cart', 'init_checkout'];
-      if (!allowed.includes(eventName)) return;
+      let dbField = eventName;
+      if (dbField === 'visit') dbField = 'visits';
+
+      const allowed = ['visits', 'add_to_cart', 'init_checkout'];
+      if (!allowed.includes(dbField)) return;
 
       const stats = await this.getAnalytics();
       const today = new Date().toISOString().split('T')[0];
 
-      stats[eventName] = (stats[eventName] || 0) + 1;
+      stats[dbField] = (stats[dbField] || 0) + 1;
 
       let dayEntry = stats.history.find(h => h.date === today);
       if (!dayEntry) {
-        dayEntry = { date: today, visit: 0, add_to_cart: 0, init_checkout: 0, orders: 0, revenue: 0 };
+        dayEntry = { date: today, visits: 0, add_to_cart: 0, init_checkout: 0, orders: 0, revenue: 0 };
         stats.history.push(dayEntry);
       }
-      dayEntry[eventName] = (dayEntry[eventName] || 0) + 1;
+      dayEntry[dbField] = (dayEntry[dbField] || 0) + 1;
 
       if (stats.history.length > 30) stats.history.shift();
 
       const { error } = await sb().from('analytics').update({
-        [eventName]: stats[eventName],
+        [dbField]: stats[dbField],
         history: stats.history,
         updated_at: new Date().toISOString()
       }).eq('id', 1);
