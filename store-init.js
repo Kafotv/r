@@ -669,7 +669,7 @@ window.StoreInit = {
           }
           container.insertAdjacentHTML('afterbegin', videoHtml);
         } else {
-          var imgHtml = '<img src="' + item.url + '" id="mainProductImg" class="product-main-img" style="width:100%; height:100%; object-fit:contain;">';
+          var imgHtml = '<img src="' + item.url + '" id="mainProductImg" class="product-main-img" style="width:100%; height:100%; object-fit:cover;">';
           container.insertAdjacentHTML('afterbegin', imgHtml);
         }
 
