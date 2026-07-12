@@ -568,7 +568,7 @@ window.StoreInit = {
           .product-media { position: sticky; top: 80px; }
         }
         .main-img-container { width: 100%; aspect-ratio: 1; border-radius: 15px; overflow: hidden; border: 1px solid #eee; background: #fdfdfd; position: relative; }
-        .product-main-img { width: 100%; height: 100%; object-fit: contain; }
+        .product-main-img { width: 100%; height: 100%; object-fit: cover; }
         
         .gallery-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.85); border: none; width: 42px; height: 42px; border-radius: 50%; color: var(--dark); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
         .gallery-arrow:hover { background: var(--primary); color: white; transform: translateY(-50%) scale(1.1); }
