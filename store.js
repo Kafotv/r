@@ -353,6 +353,53 @@
             document.getElementById('cartStepPayment').style.display = 'none';
         }
         window.showPaymentStep = function showPaymentStep() {
+            const nameEl = document.getElementById('custName');
+            const cityEl = document.getElementById('custCityName');
+            const addrEl = document.getElementById('custAddress');
+            const phoneEl = document.getElementById('custPhone');
+            
+            const name = nameEl ? nameEl.value.trim() : '';
+            const city = cityEl ? cityEl.value.trim() : '';
+            const address = addrEl ? addrEl.value.trim() : '';
+            const phone = phoneEl ? phoneEl.value.trim() : '';
+
+            let hasError = false;
+
+            if (nameEl) nameEl.style.borderColor = '';
+            if (cityEl) cityEl.style.borderColor = '';
+            if (addrEl) addrEl.style.borderColor = '';
+            if (phoneEl) phoneEl.style.borderColor = '';
+
+            if (!name) {
+                if (nameEl) nameEl.style.borderColor = '#ef4444';
+                hasError = true;
+            }
+            if (!city) {
+                if (cityEl) cityEl.style.borderColor = '#ef4444';
+                hasError = true;
+            }
+            if (!address) {
+                if (addrEl) addrEl.style.borderColor = '#ef4444';
+                hasError = true;
+            }
+            if (!phone) {
+                if (phoneEl) phoneEl.style.borderColor = '#ef4444';
+                hasError = true;
+            }
+
+            if (hasError) {
+                showToast('يرجى إكمال جميع الحقول المطلوبة');
+                return;
+            }
+
+            // Simple phone format check (between 7 to 15 digits)
+            const cleanPhone = phone.replace(/[^0-9]/g, '');
+            if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+                if (phoneEl) phoneEl.style.borderColor = '#ef4444';
+                showToast('يرجى إدخال رقم هاتف صحيح');
+                return;
+            }
+
             document.getElementById('cartStepCheckout').style.display = 'none';
             document.getElementById('cartStepPayment').style.display = 'block';
         }
