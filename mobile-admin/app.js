@@ -93,11 +93,10 @@ async function handleLogin() {
 
   const localAdmin = localStorage.getItem('mobileAdminPhone');
   const localPass = localStorage.getItem('mobileAdminPass');
-  if ((localAdmin && phone === localAdmin && password === localPass) || (phone === '972568313507' && password === 'saifps4ps')) {
+  if (localAdmin && phone === localAdmin && password === localPass) {
     state.isAdmin = true;
     state.user = { phone, name: 'المدير', id: 'admin' };
     localStorage.setItem('mobileAdminSession', JSON.stringify(state.user));
-    if (!localAdmin) { localStorage.setItem('mobileAdminPhone', phone); localStorage.setItem('mobileAdminPass', password); }
     enterApp(); return;
   }
 

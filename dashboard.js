@@ -6499,6 +6499,8 @@ async function submitEditOrder(event, orderId) {
                 items: JSON.stringify(items)
             };
             
+
+
             try {
                 const result = await DB.updateOrder(orderId, data);
                 if (result) {
@@ -6872,6 +6874,13 @@ function playSoundCore(soundType, volumePercent, customData, kind) {
             } else {
                 showToast(kind === 'distributor' ? 'ℹ️ لم تقم برفع ملف صوتي مخصص للموزعين بعد.' : 'ℹ️ لم تقم برفع ملف صوتي مخصص بعد. تم استخدام النغمة الافتراضية.');
             }
+        }
+
+        if (soundType === 'mane') {
+            const audio = new Audio('audio/mane.mp3');
+            audio.volume = gainVal;
+            audio.play().catch(e => console.error("mane.mp3 play blocked:", e));
+            return;
         }
 
         // Initialize or resume global AudioContext
