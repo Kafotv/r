@@ -1199,16 +1199,20 @@
         });
 
 // ─── Back to Top & Scroll Logic ───
+        let cachedFooterTop = null;
         window.addEventListener('scroll', () => {
             const btn = document.getElementById('backToTop');
             const footer = document.querySelector('.main-footer');
             if (btn && footer) {
+                if (cachedFooterTop === null) {
+                    cachedFooterTop = footer.offsetTop;
+                    setTimeout(() => { cachedFooterTop = null; }, 1500);
+                }
                 const scrollPos = window.scrollY + window.innerHeight;
-                const footerTop = footer.offsetTop;
                 if (window.scrollY > 300) {
                     btn.classList.add('visible');
-                    if (scrollPos >= footerTop) {
-                        const diff = scrollPos - footerTop;
+                    if (scrollPos >= cachedFooterTop) {
+                        const diff = scrollPos - cachedFooterTop;
                         btn.style.bottom = (diff - 22) + 'px';
                     } else {
                         btn.style.bottom = window.innerWidth <= 768 ? '85px' : '30px';
@@ -1217,7 +1221,7 @@
                     btn.classList.remove('visible');
                 }
             }
-        });
+        }, { passive: true });
 
 // ─── FCM Registration ───
     async function initFCM() {
