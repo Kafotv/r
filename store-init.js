@@ -910,7 +910,7 @@ window.StoreInit = {
     if (store) store.style.display = 'none';
     if (dash) dash.style.display = 'none';
     if (main) main.style.display = 'none';
-    if (footer) footer.style.display = 'none';
+    if (footer) footer.style.display = 'block';
     window.scrollTo(0, 0);
   },
 
