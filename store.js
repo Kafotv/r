@@ -1235,7 +1235,10 @@
             const messaging = firebase.messaging();
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
-                const token = await messaging.getToken();
+                const swPath = window.location.pathname.includes('/r/') ? '/r/firebase-messaging-sw.js' : '/firebase-messaging-sw.js';
+                const scopePath = window.location.pathname.includes('/r/') ? '/r/firebase-cloud-messaging-push-scope' : '/firebase-cloud-messaging-push-scope';
+                const reg = await navigator.serviceWorker.register(swPath, { scope: scopePath });
+                const token = await messaging.getToken({ serviceWorkerRegistration: reg });
                 if (token) {
                     await DB.supabase.from('fcm_tokens').upsert({ token, role: 'customer', created_at: new Date().toISOString() }, { onConflict: 'token' });
                     localStorage.setItem('fcm_registered', 'true');
