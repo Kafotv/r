@@ -249,9 +249,6 @@ const DB = (() => {
         console.error('getOrders:', error);
         return [];
       }
-      if (data) {
-        console.log('Fetched orders count:', data.length);
-      }
       return data.map(r => {
         const o = fromRow(r, ORDER_MAP);
         o.id = String(o.id);
