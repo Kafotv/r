@@ -963,16 +963,102 @@
                     return;
                 }
                 tbody.innerHTML = myOrders.map(o => `
-                    <tr style="border-bottom:1px solid var(--gray-200);">
+                    <tr onclick="showDistOrderDetail('${o.id}')" style="border-bottom:1px solid var(--gray-200); cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='transparent'">
                         <td style="padding:15px; font-weight:800; color:var(--primary);">#${o.id}</td>
                         <td style="padding:15px; font-size:13px; color:var(--gray-600);">${new Date(o.created_at || o.date).toLocaleDateString('ar-EG')}</td>
-                        <td style="padding:15px;"><div style="font-size:13px; font-weight:700;">${(o.items || []).map(i => i.name).join('، ')}</div></td>
+                        <td style="padding:15px; font-size:13px; color:var(--gray-600);">${(o.items || []).map(i => i.name).join('، ').substring(0, 40)}${(o.items || []).map(i => i.name).join('، ').length > 40 ? '...' : ''}</td>
                         <td style="padding:15px; font-weight:800; font-size:16px;">${parseFloat(o.total).toFixed(2)} ₪</td>
                         <td style="padding:15px;"><span style="padding:5px 12px; border-radius:30px; font-size:12px; font-weight:700; background:var(--gray-100); border:1px solid var(--gray-200); color:var(--primary);">${o.status || 'جديد'}</span></td>
                     </tr>
                 `).join('');
             } catch(e) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#ef4444;">فشل تحميل الطلبات</td></tr>';
+            }
+        }
+
+        function showDistOrderDetail(orderId) {
+            try {
+                const modal = document.getElementById('distOrderDetailModal');
+                if (!modal) return;
+                document.getElementById('distOrderDetailId').textContent = orderId;
+                const body = document.getElementById('distOrderDetailBody');
+                body.innerHTML = '<div style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin" style="font-size:24px; color:var(--primary);"></i></div>';
+                openModal('distOrderDetailModal');
+
+                DB.supabase.from('orders').select('*').eq('id', orderId).single().then(({ data: order }) => {
+                    if (!order) {
+                        body.innerHTML = '<div style="text-align:center; padding:40px; color:#ef4444;">الطلب غير موجود</div>';
+                        return;
+                    }
+                    const items = order.items || [];
+                    const address = order.address || (order.customer && order.customer.address) || '';
+                    const city = order.city || (order.customer && order.customer.city) || '';
+                    const phone = (order.customer && order.customer.phone) || order.phone || '';
+                    const name = (order.customer && order.customer.name) || order.name || '';
+                    const statusColors = {
+                        'جديد': '#3b82f6',
+                        'قيد التجهيز': '#f59e0b',
+                        'تم الشحن': '#8b5cf6',
+                        'تم التسليم': '#10b981',
+                        'ملغي': '#ef4444'
+                    };
+                    const statusColor = statusColors[order.status] || 'var(--gray-600)';
+
+                    let itemsHTML = items.map((item, i) => `
+                        <div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--gray-100);">
+                            ${item.image ? `<img src="${item.image}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;">` : ''}
+                            <div style="flex:1;">
+                                <div style="font-weight:700; font-size:13px; color:var(--dark);">${item.name || 'منتج'}</div>
+                                <div style="font-size:12px; color:var(--gray-400);">الكمية: ${item.quantity || 1}</div>
+                            </div>
+                            <div style="font-weight:800; font-size:14px; color:var(--primary);">${parseFloat(item.price || 0).toFixed(2)} ₪</div>
+                        </div>
+                    `).join('') || '<div style="color:var(--gray-400); padding:10px 0;">لا توجد منتجات</div>';
+
+                    body.innerHTML = `
+                        <div style="display:grid; gap:15px;">
+                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">الحالة</span>
+                                <span style="font-weight:800; color:${statusColor};">${order.status || 'جديد'}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">التاريخ</span>
+                                <span style="font-weight:700;">${new Date(order.created_at || order.date).toLocaleDateString('ar-EG')}</span>
+                            </div>
+                            ${name ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">الاسم</span>
+                                <span style="font-weight:700;">${name}</span>
+                            </div>` : ''}
+                            ${phone ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">رقم الجوال</span>
+                                <span style="font-weight:700; direction:ltr; text-align:left;">${phone}</span>
+                            </div>` : ''}
+                            ${city ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">المدينة</span>
+                                <span style="font-weight:700;">${city}</span>
+                            </div>` : ''}
+                            ${address ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
+                                <span style="font-weight:700; color:var(--gray-600);">العنوان</span>
+                                <span style="font-weight:700; flex:1; text-align:left; font-size:13px;">${address}</span>
+                            </div>` : ''}
+                            <div style="margin-top:10px;">
+                                <h4 style="font-size:15px; font-weight:800; margin:0 0 10px 0; color:var(--dark);">المنتجات</h4>
+                                ${itemsHTML}
+                            </div>
+                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--primary); color:white; border-radius:12px; font-size:16px;">
+                                <span style="font-weight:800;">الإجمالي</span>
+                                <span style="font-weight:900;">${parseFloat(order.total || 0).toFixed(2)} ₪</span>
+                            </div>
+                            ${order.notes ? `<div style="padding:12px; background:#fef3c7; border-radius:10px; font-size:13px; color:#92400e;">
+                                <strong>ملاحظات:</strong> ${order.notes}
+                            </div>` : ''}
+                        </div>
+                    `;
+                }).catch(() => {
+                    body.innerHTML = '<div style="text-align:center; padding:40px; color:#ef4444;">فشل تحميل تفاصيل الطلب</div>';
+                });
+            } catch(e) {
+                console.error('Order detail error:', e);
             }
         }
 
