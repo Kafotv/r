@@ -22,12 +22,12 @@ const DB = (() => {
       await sb().from('settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     },
     async getOrders() {
-      const { data, error } = await sb().from('orders').select('*').order('date', { ascending: false });
+      const { data, error } = await sb().from('orders').select('id, date, customer, items, total, shipping_cost, discount, coupon_code, notes, status, is_wholesale, distributor_id, created_at, updated_at').order('date', { ascending: false });
       if (error) { console.error('Orders error:', error.code, error.message); return []; }
       return (data || []).map(r => ({ id: String(r.id), date: r.date, customer: r.customer || {}, items: r.items || [], total: r.total || 0, shipping_cost: r.shipping_cost || 0, discount: r.discount || 0, coupon_code: r.coupon_code || '', notes: r.notes || '', status: r.status || 'pending', is_wholesale: r.is_wholesale, distributor_id: r.distributor_id, created_at: r.created_at, updated_at: r.updated_at }));
     },
     async getProducts() {
-      const { data, error } = await sb().from('products').select('*');
+      const { data, error } = await sb().from('products').select('id, name, price, sale_price, wholesale_price, image, images, category, categories, advanced');
       if (error) { console.error('Products error:', error.code, error.message); return []; }
       return (data || []).map(r => { let adv = r.advanced; if (typeof adv === 'string') try { adv = JSON.parse(adv); } catch(e) { adv = {}; }; let cats = r.categories; if (typeof cats === 'string') try { cats = JSON.parse(cats); } catch(e) { cats = []; }; if (!Array.isArray(cats)) cats = []; return { id: r.id, name: r.name, price: r.price, salePrice: r.sale_price, image: r.image, images: Array.isArray(r.images) ? r.images : [], video: r.video || '', wholesalePrice: r.wholesale_price || r.wholesalePrice, category: r.category, categories: cats, advanced: adv || {} }; });
     },
@@ -196,14 +196,84 @@ function switchPage(name) {
   if (tab) tab.classList.add('active');
   document.getElementById('headerTitle').textContent = { Dashboard: 'الإحصائيات', Orders: 'المبيعات', Products: 'المخزون', Distributors: 'الموزعين', Settings: 'الإعدادات', NotifSounds: 'أصوات التنبيهات' }[name] || name;
   if (location.hash !== '#' + name) location.hash = name;
-  if (name === 'Orders') loadOrders();
-  if (name === 'Products') { if (_prodTab !== 'products') switchProdTab('products'); loadProducts(); loadCategoriesPage(); }
-  if (name === 'Distributors') loadDistributors();
+  if (name === 'Orders') loadOrders(document.querySelector('.orders-filter .filter-btn.active')?.dataset?.filter || 'all', state.orders);
+  if (name === 'Products') { if (_prodTab !== 'products') switchProdTab('products'); loadProducts(state.products, _categories); loadCategoriesPage(_categories); }
+  if (name === 'Distributors') loadDistributors(state.distributors);
   if (name === 'Dashboard') loadDashboard();
   state.currentPage = name;
 }
 
-async function loadAll() { await loadOrders(); await Promise.all([loadProducts(), loadDistributors(), loadDashboard()]); }
+async function loadAll() {
+  try {
+    // Show skeletons immediately before fetching new data
+    const ordersEl = document.getElementById('ordersList');
+    const recentEl = document.getElementById('recentOrders');
+    const productsEl = document.getElementById('productsList');
+    const distEl = document.getElementById('distContent');
+
+    if (ordersEl) {
+      ordersEl.innerHTML = `
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      `;
+    }
+    if (recentEl) {
+      recentEl.innerHTML = `
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      `;
+    }
+    if (productsEl) {
+      productsEl.innerHTML = `
+        <div class="skeleton-product-grid">
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+        </div>
+      `;
+    }
+    if (distEl) {
+      distEl.innerHTML = `
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      `;
+    }
+
+    const [orders, products, distributors, categoriesRes] = await Promise.all([
+      DB.getOrders(),
+      DB.getProducts(),
+      DB.getDistributors(),
+      DB.supabase.from('categories').select('*').order('name')
+    ]);
+    const categories = categoriesRes.data || [];
+    
+    try {
+      localStorage.setItem('cache_orders', JSON.stringify(orders || []));
+      localStorage.setItem('cache_products', JSON.stringify(products || []));
+      localStorage.setItem('cache_distributors', JSON.stringify(distributors || []));
+      localStorage.setItem('cache_categories', JSON.stringify(categories));
+    } catch (e) {
+      console.warn('Failed to cache data:', e);
+    }
+
+    state.orders = orders || [];
+    state.products = products || [];
+    state.distributors = distributors || [];
+    _categories = categories;
+
+    renderAllIncremental(orders, products, distributors, categories);
+  } catch (e) {
+    console.error('Error during loadAll:', e);
+  }
+}
 async function refreshAll() { showToast('جاري التحديث...'); await loadAll(); showToast('تم التحديث بنجاح', 'success'); }
 
 // ── Dashboard ──
@@ -314,10 +384,21 @@ function renderAnalytics() {
 }
 
 // ── Orders ──
-async function loadOrders(filter = 'all') {
+async function loadOrders(filter = 'all', preFetchedData = null) {
   const el = document.getElementById('ordersList');
   try {
-    state.orders = (await DB.getOrders()) || [];
+    if (preFetchedData) {
+      state.orders = preFetchedData;
+    } else {
+      el.innerHTML = `
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      `;
+      state.orders = (await DB.getOrders()) || [];
+    }
     let list = state.orders;
     if (filter !== 'all') list = list.filter(o => o.status === filter);
     if (list.length === 0) { el.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد طلبات</p></div>'; return; }
@@ -348,12 +429,30 @@ async function loadOrders(filter = 'all') {
 }
 
 // ── Products ──
-async function loadProducts() {
+async function loadProducts(preFetchedProducts = null, preFetchedCategories = null) {
   const el = document.getElementById('productsList');
   const search = (document.getElementById('prodSearch').value || '').toLowerCase();
   try {
-    state.products = (await DB.getProducts()) || [];
-    await loadCategories();
+    if (preFetchedProducts) {
+      state.products = preFetchedProducts;
+    } else {
+      el.innerHTML = `
+        <div class="skeleton-product-grid">
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+          <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+        </div>
+      `;
+      state.products = (await DB.getProducts()) || [];
+    }
+    if (preFetchedCategories) {
+      _categories = preFetchedCategories;
+      const sel = document.getElementById('editProdCategory');
+      if (sel) sel.innerHTML = '<option value="">بدون تصنيف</option>' + _categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    } else {
+      await loadCategories();
+    }
     let list = state.products;
     if (search) list = list.filter(p => p.name && p.name.toLowerCase().includes(search));
     if (list.length === 0) { el.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>لا توجد منتجات</p></div>'; return; }
@@ -371,7 +470,7 @@ async function loadProducts() {
         catName = c ? c.name : (typeof first === 'string' ? first : 'بدون تصنيف');
       }
       const wholesale = p.wholesalePrice ? parseFloat(p.wholesalePrice) : 0;
-      return `<div class="prod-card"><div class="prod-img">${catName !== 'بدون تصنيف' ? `<span class="prod-cat-badge"><i class="fas fa-tag"></i> ${catName}</span>` : ''}${p.image ? '<img src="' + p.image + '" alt="">' : '<i class="fas fa-box" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--gray-400);font-size:20px;"></i>'}</div><div class="prod-info"><div class="prod-name">${p.name || 'بدون اسم'}</div><div class="prod-price-row"><span class="prod-price">₪${parseFloat(p.price || 0).toFixed(2)}</span>${wholesale ? `<span class="prod-wholesale-price">جملة ₪${wholesale.toFixed(2)}</span>` : ''}</div><div class="prod-stock ${sc}">${st}</div></div></div>`;
+      return `<div class="prod-card"><div class="prod-img">${catName !== 'بدون تصنيف' ? `<span class="prod-cat-badge"><i class="fas fa-tag"></i> ${catName}</span>` : ''}${p.image ? '<img src="' + p.image + '" alt="" loading="lazy">' : '<i class="fas fa-box" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--gray-400);font-size:20px;"></i>'}</div><div class="prod-info"><div class="prod-name">${p.name || 'بدون اسم'}</div><div class="prod-price-row"><span class="prod-price">₪${parseFloat(p.price || 0).toFixed(2)}</span>${wholesale ? `<span class="prod-wholesale-price">جملة ₪${wholesale.toFixed(2)}</span>` : ''}</div><div class="prod-stock ${sc}">${st}</div></div></div>`;
     }).join('') + '</div>';
     el.querySelectorAll('.prod-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -399,15 +498,19 @@ async function loadCategories() {
 function toggleCategoryPanel() {
   switchPage('Categories');
 }
-async function loadCategoriesPage() {
+async function loadCategoriesPage(preFetchedCategories = null) {
   const el = document.getElementById('categoriesList');
   try {
-    const cats = await DB.supabase.from('categories').select('*').order('name');
-    _categories = cats.data || [];
+    if (preFetchedCategories) {
+      _categories = preFetchedCategories;
+    } else {
+      const cats = await DB.supabase.from('categories').select('*').order('name');
+      _categories = cats.data || [];
+    }
     if (!_categories.length) { el.innerHTML = '<div class="empty-state"><i class="fas fa-tags"></i><p>لا توجد تصنيفات</p><p style="font-size:12px;margin-top:4px">اضف تصنيف من زر الإضافة بالأعلى</p></div>'; return; }
     el.innerHTML = '<div class="cat-grid">' + _categories.map(c => {
       const count = state.products.filter(p => String(p.category) === String(c.id) || p.category === c.name || (Array.isArray(p.categories) && p.categories.some(cid => String(cid) === String(c.id) || String(cid) === c.name))).length;
-      const icon = c.icon && c.icon.startsWith('fa-') ? `<i class="fas ${c.icon}"></i>` : c.icon ? `<img src="${c.icon}" style="width:32px;height:32px;object-fit:contain">` : '<i class="fas fa-tag"></i>';
+      const icon = c.icon && c.icon.startsWith('fa-') ? `<i class="fas ${c.icon}"></i>` : c.icon ? `<img src="${c.icon}" style="width:32px;height:32px;object-fit:contain" loading="lazy">` : '<i class="fas fa-tag"></i>';
       const bg = c.image ? `style="background-image:url('${c.image.replace(/'/g, "\\'")}');background-size:cover;background-position:center"` : '';
       return `<div class="cat-card" onclick="openCategoryEditor('${c.id}')"><div class="cat-icon-wrap" ${bg}>${!c.image ? icon : ''}</div><div class="name">${c.name}</div><div class="count">${count} منتج</div></div>`;
     }).join('') + '</div>';
@@ -784,7 +887,7 @@ function switchDistTab(tab) {
   _distTab = tab;
   document.querySelectorAll('#pageDistributors .dist-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`#pageDistributors .dist-tab:nth-child(${tab === 'pending' ? 1 : 2})`).classList.add('active');
-  loadDistributors();
+  loadDistributors(state.distributors);
 }
 let _prodTab = 'products';
 function switchProdTab(tab) {
@@ -793,12 +896,22 @@ function switchProdTab(tab) {
   document.querySelector(`#pageProducts .dist-tab:nth-child(${tab === 'products' ? 1 : 2})`).classList.add('active');
   document.getElementById('prodProductsTab').style.display = tab === 'products' ? 'block' : 'none';
   document.getElementById('prodCategoriesTab').style.display = tab === 'categories' ? 'block' : 'none';
-  if (tab === 'products') loadProducts();
-  if (tab === 'categories') loadCategoriesPage();
+  if (tab === 'products') loadProducts(state.products, _categories);
+  if (tab === 'categories') loadCategoriesPage(_categories);
 }
-async function loadDistributors() {
-  state.distributors = (await DB.getDistributors()) || [];
+async function loadDistributors(preFetchedDistributors = null) {
   const el = document.getElementById('distContent');
+  if (preFetchedDistributors) {
+    state.distributors = preFetchedDistributors;
+  } else {
+    el.innerHTML = `
+      <div class="skeleton-orders-list">
+        <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+      </div>
+    `;
+    state.distributors = (await DB.getDistributors()) || [];
+  }
   if (_distTab === 'pending') {
     const pending = state.distributors.filter(d => d.status === 'pending');
     if (!pending.length) { el.innerHTML = '<div class="empty-state"><i class="fas fa-user-check"></i><p>لا توجد طلبات انضمام معلقة</p></div>'; return; }
@@ -867,7 +980,7 @@ document.getElementById('ordersFilter').addEventListener('click', function(e) {
   if (!btn) return;
   document.querySelectorAll('.orders-filter .filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  loadOrders(btn.dataset.filter);
+  loadOrders(btn.dataset.filter, state.orders);
 });
 
 // ── Notifications ──
@@ -911,6 +1024,7 @@ function notifSound() {
 }
 const NOTIF_TONES = {
   none:   { name: 'صامت', notes: [] },
+  mane:   { name: 'صوت الكاش المميز (mane.mp3) 🎵', file: 'audio/mane.mp3' },
   beep:   { name: 'تنبيه بسيط', notes: [[800, 150, 'sine']] },
   double: { name: 'نغمة مزدوجة', notes: [[800, 120, 'sine'], [800, 120, 'sine']] },
   high:   { name: 'عالي', notes: [[1200, 280, 'square']] },
@@ -926,6 +1040,11 @@ function getAudioCtx() {
 }
 function playTone(toneId) {
   const t = NOTIF_TONES[toneId] || NOTIF_TONES.beep;
+  if (t.file) {
+    const audio = new Audio(t.file);
+    audio.play().catch(e => console.error("Sound play blocked:", e));
+    return;
+  }
   if (!t.notes || !t.notes.length) return;
   const ctx = getAudioCtx(); if (!ctx) return;
   let t0 = ctx.currentTime;
@@ -943,7 +1062,7 @@ function playTone(toneId) {
 function playNotifSound(type) {
   if (localStorage.getItem('mobileNotifSound') === 'off') return;
   const map = JSON.parse(localStorage.getItem('mobileNotifSounds') || '{}');
-  const toneId = map[type] || map['default'] || 'beep';
+  const toneId = map[type] || map['default'] || (type === 'order' ? 'mane' : 'beep');
   playTone(toneId);
 }
 const NOTIF_SOUND_TYPES = [
@@ -1086,12 +1205,70 @@ function toggleDarkMode() {
   const icon = document.getElementById('darkModeIcon');
   if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
 }
+// ── Incremental Renderer ──
+function renderCurrentPage() {
+  const name = state.currentPage || 'Dashboard';
+  if (name === 'Dashboard') {
+    loadDashboard();
+  } else if (name === 'Orders') {
+    loadOrders(document.querySelector('.orders-filter .filter-btn.active')?.dataset?.filter || 'all', state.orders);
+  } else if (name === 'Products') {
+    loadProducts(state.products, _categories);
+    loadCategoriesPage(_categories);
+  } else if (name === 'Distributors') {
+    loadDistributors(state.distributors);
+  }
+}
+
+function renderAllIncremental(orders = null, products = null, distributors = null, categories = null) {
+  renderCurrentPage();
+  const currentPage = state.currentPage || 'Dashboard';
+  setTimeout(() => {
+    if (currentPage !== 'Orders') loadOrders(document.querySelector('.orders-filter .filter-btn.active')?.dataset?.filter || 'all', orders || state.orders);
+  }, 100);
+  setTimeout(() => {
+    if (currentPage !== 'Products') {
+      loadProducts(products || state.products, categories || _categories);
+      loadCategoriesPage(categories || _categories);
+    }
+  }, 200);
+  setTimeout(() => {
+    if (currentPage !== 'Distributors') loadDistributors(distributors || state.distributors);
+  }, 300);
+}
+
+// ── Local Cache Loader ──
+function loadCachedData() {
+  try {
+    const cachedOrders = localStorage.getItem('cache_orders');
+    const cachedProducts = localStorage.getItem('cache_products');
+    const cachedDistributors = localStorage.getItem('cache_distributors');
+    const cachedCategories = localStorage.getItem('cache_categories');
+
+    if (cachedOrders) state.orders = JSON.parse(cachedOrders);
+    if (cachedProducts) state.products = JSON.parse(cachedProducts);
+    if (cachedDistributors) state.distributors = JSON.parse(cachedDistributors);
+    if (cachedCategories) _categories = JSON.parse(cachedCategories);
+
+    if (state.orders.length || state.products.length || state.distributors.length || _categories.length) {
+      renderAllIncremental();
+    }
+  } catch (e) {
+    console.warn('Failed to load cached data:', e);
+  }
+}
+
 // ── Auto-login ──
 document.addEventListener('DOMContentLoaded', () => {
   const savedNotifs = localStorage.getItem('mobileNotifs');
   if (savedNotifs) { state.notifs = JSON.parse(savedNotifs).map(n => ({ icon: 'bell', ...n })); state.newNotifCount = state.notifs.filter(n => !n.read).length; if (state.newNotifCount > 0) document.getElementById('notifDot')?.classList.add('show'); }
   const saved = localStorage.getItem('mobileAdminSession');
-  if (saved) { state.user = JSON.parse(saved); state.isAdmin = state.user.id === 'admin'; enterApp(); }
+  if (saved) {
+    state.user = JSON.parse(saved);
+    state.isAdmin = state.user.id === 'admin';
+    loadCachedData();
+    enterApp();
+  }
   if (localStorage.getItem('mobileDarkMode') === '1') {
     document.body.classList.add('dark-mode');
     const icon = document.getElementById('darkModeIcon');

@@ -731,6 +731,26 @@ header {
     }
 }
 
+.cat-section-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-bottom: 4px;
+}
+.cat-section-indicators span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    transition: all 0.2s;
+}
+.cat-section-indicators span.active {
+    background: var(--primary);
+    width: 20px;
+    border-radius: 4px;
+}
+
 .main-container.no-sidebar .cat-section-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }

@@ -5951,7 +5951,7 @@
     if (typeof window.storeOrdersData === 'undefined') return;
     const order = window.storeOrdersData.find(o => o.id === orderId);
     if (!order) return;
-    const cur = window.storeCurrency || 'د.أ';
+    const cur = window.storeCurrency || '₪';
     switchTab('tab-order-details', false);
     const newUrl = new URL(window.location);
     newUrl.searchParams.set('tab', 'order-details');
@@ -6333,7 +6333,7 @@ window.recalcInlineTotal = function() {
     const ship = parseFloat(body.querySelector('input[name="shippingCost"]')?.value) || 0;
     const disc = parseFloat(body.querySelector('input[name="discount"]')?.value) || 0;
     const total = document.getElementById('inline-total-display');
-    const cur = window.storeCurrency || 'د.أ';
+    const cur = window.storeCurrency || '₪';
     if(total) total.textContent = (sum + ship - disc).toFixed(2) + ' ' + cur;
 };
 
@@ -6693,7 +6693,7 @@ window.filterProductSelector = function() {
 window.confirmOrderWhatsApp = function(orderId) {
     const order = window.storeOrdersData.find(o => o.id === orderId);
     if(!order) return;
-    const cur = window.storeCurrency || 'د.أ';
+    const cur = window.storeCurrency || '₪';
     
     let phone = order.customer.phone || '';
     phone = phone.replace(/\s+/g, '').replace('+', '');

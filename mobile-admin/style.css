@@ -325,3 +325,72 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .confirm-no{background:var(--gray-100);color:var(--text)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes scaleIn{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Skeleton Loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite linear;
+  border-radius: 6px;
+}
+.dark-mode .skeleton {
+  background: linear-gradient(90deg, var(--gray-50) 25%, var(--gray-200) 50%, var(--gray-50) 75%);
+}
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-orders-list, .skeleton-products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-order-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.skeleton-order-card .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.skeleton-order-card .content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skeleton-order-card .line-sm { width: 35%; height: 10px; }
+.skeleton-order-card .line-md { width: 70%; height: 12px; }
+.skeleton-order-card .line-lg { width: 90%; height: 10px; }
+
+.skeleton-product-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.skeleton-product-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.skeleton-product-card .img {
+  width: 100%;
+  aspect-ratio: 1;
+}
+.skeleton-product-card .content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skeleton-product-card .line-title { width: 85%; height: 12px; }
+.skeleton-product-card .line-price { width: 50%; height: 10px; }
+.skeleton-product-card .line-stock { width: 35%; height: 8px; }

@@ -7,8 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f172a">
 <title>إدارة المتجر</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -202,7 +203,12 @@
         </div>
       </div>
       <div class="section-title"><i class="fas fa-clock" style="color:var(--gray-400)"></i> آخر الطلبات</div>
-      <div id="recentOrders"><div class="loading"><i class="fas fa-spinner"></i></div></div>
+      <div id="recentOrders">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
     </div>
 
     <div class="page" id="pageOrders">
@@ -214,7 +220,13 @@
         <button class="filter-btn" data-filter="delivered">تم التوصيل</button>
         <button class="filter-btn" data-filter="cancelled">ملغي</button>
       </div>
-      <div id="ordersList"><div class="loading"><i class="fas fa-spinner"></i></div></div>
+      <div id="ordersList">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
     </div>
 
     <div class="page" id="pageProducts">
@@ -229,7 +241,14 @@
             <button class="add-prod-btn" onclick="showAddProductForm()"><i class="fas fa-plus"></i> إضافة</button>
           </div>
           <div class="search-bar"><input type="text" id="prodSearch" placeholder="بحث عن منتج..." oninput="loadProducts()"></div>
-          <div id="productsList"><div class="loading"><i class="fas fa-spinner"></i></div></div>
+          <div id="productsList">
+            <div class="skeleton-product-grid">
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+            </div>
+          </div>
         </div>
         <div id="prodCategoriesTab" style="display:none">
           <div class="prod-header">
@@ -246,7 +265,12 @@
         <button class="dist-tab active" onclick="switchDistTab('pending')"><i class="fas fa-user-clock"></i> طلبات الانضمام</button>
         <button class="dist-tab" onclick="switchDistTab('approved')"><i class="fas fa-users"></i> الموزعين</button>
       </div>
-      <div id="distContent"><div class="loading"><i class="fas fa-spinner"></i></div></div>
+      <div id="distContent">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
     </div>
 
     <div class="page" id="pageSettings">
@@ -315,6 +339,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>
