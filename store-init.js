@@ -2261,7 +2261,7 @@ window.StoreInit = {
     const isExplicitAllCatalog = catId === 'all' && (window.location.hash.includes('cat=all') || window.location.search.includes('cat=all'));
 
     if (catId === 'all' && !isExplicitAllCatalog) {
-      // Home page - show home sections
+      if (typeof this._hideProductPage === 'function') this._hideProductPage();
       this._showHomePage();
       return;
     }
@@ -2269,8 +2269,11 @@ window.StoreInit = {
     const homeWrap = document.getElementById('homeSectionsWrap');
     if (homeWrap) homeWrap.style.display = 'none';
 
-    // Hide product details view
     if (typeof this._hideProductPage === 'function') this._hideProductPage();
+
+    if (catId !== 'all' && catId !== 'recommended') {
+      history.replaceState(null, '', window.location.pathname + '#?cat=' + catId);
+    }
 
     const isRecommendedView = catId === 'recommended';
     let visibleProducts = this.products.filter(p => {
