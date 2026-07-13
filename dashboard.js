@@ -367,6 +367,24 @@
             } catch(e) { console.warn('Realtime not available:', e.message); }
         }
 
+        window.onDateRangeChange = function() {
+            const range = document.getElementById('cro-date-range').value;
+            const customDiv = document.getElementById('custom-date-inputs');
+            if (range === 'custom') {
+                customDiv.style.display = 'flex';
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (!document.getElementById('cro-start-date').value) {
+                    document.getElementById('cro-start-date').value = todayStr;
+                }
+                if (!document.getElementById('cro-end-date').value) {
+                    document.getElementById('cro-end-date').value = todayStr;
+                }
+            } else {
+                customDiv.style.display = 'none';
+            }
+            loadAdvancedStats();
+        };
+
         let statsChart = null;
         async function loadAdvancedStats() {
             console.log('[STATS] loadAdvancedStats called');
@@ -375,7 +393,9 @@
             
             // Load saved settings from localStorage
             const savedSettings = JSON.parse(localStorage.getItem('cro_settings') || '{"targets":{"final": 5.0, "interest": 20.0, "success": 50.0}, "visible":{"final":true, "interest":true, "success":true}}');
-            const range = document.getElementById('cro-date-range')?.value || '7days';
+            const range = document.getElementById('cro-date-range')?.value || 'today';
+            const customStart = document.getElementById('cro-start-date')?.value;
+            const customEnd = document.getElementById('cro-end-date')?.value;
 
             try {
                 if (btn) {
@@ -398,36 +418,51 @@
                 let filteredOrders = allOrdersRaw;
                 let filteredHistory = history;
 
-                const now = new Date();
-                const getStartDate = (rangeVal) => {
-                    const d = new Date();
-                    if (rangeVal === 'today') d.setHours(0,0,0,0);
-                    else if (rangeVal === 'yesterday') {
-                        d.setDate(d.getDate() - 1);
-                        d.setHours(0,0,0,0);
-                    }
-                    else if (rangeVal === '7days') d.setDate(d.getDate() - 7);
-                    else if (rangeVal === '30days') d.setDate(d.getDate() - 30);
-                    else return null;
-                    return d;
-                };
+                if (range === 'custom' && customStart && customEnd) {
+                    const startDate = new Date(customStart);
+                    startDate.setHours(0,0,0,0);
+                    const endDate = new Date(customEnd);
+                    endDate.setHours(23,59,59,999);
 
-                const startDate = getStartDate(range);
-                if (startDate) {
-                    if (range === 'yesterday') {
-                        const endDate = new Date(startDate);
-                        endDate.setDate(endDate.getDate() + 1);
-                        filteredOrders = allOrdersRaw.filter(o => {
-                            const od = new Date(o.date || o.createdAt);
-                            return od >= startDate && od < endDate;
-                        });
-                        filteredHistory = history.filter(h => {
-                            const hd = new Date(h.date);
-                            return hd >= startDate && hd < endDate;
-                        });
-                    } else {
-                        filteredOrders = allOrdersRaw.filter(o => new Date(o.date || o.createdAt) >= startDate);
-                        filteredHistory = history.filter(h => new Date(h.date) >= startDate);
+                    filteredOrders = allOrdersRaw.filter(o => {
+                        const od = new Date(o.date || o.createdAt);
+                        return od >= startDate && od <= endDate;
+                    });
+                    filteredHistory = history.filter(h => {
+                        const hd = new Date(h.date);
+                        return hd >= startDate && hd <= endDate;
+                    });
+                } else {
+                    const getStartDate = (rangeVal) => {
+                        const d = new Date();
+                        if (rangeVal === 'today') d.setHours(0,0,0,0);
+                        else if (rangeVal === 'yesterday') {
+                            d.setDate(d.getDate() - 1);
+                            d.setHours(0,0,0,0);
+                        }
+                        else if (rangeVal === '7days') d.setDate(d.getDate() - 7);
+                        else if (rangeVal === '30days') d.setDate(d.getDate() - 30);
+                        else return null;
+                        return d;
+                    };
+
+                    const startDate = getStartDate(range);
+                    if (startDate) {
+                        if (range === 'yesterday') {
+                            const endDate = new Date(startDate);
+                            endDate.setDate(endDate.getDate() + 1);
+                            filteredOrders = allOrdersRaw.filter(o => {
+                                const od = new Date(o.date || o.createdAt);
+                                return od >= startDate && od < endDate;
+                            });
+                            filteredHistory = history.filter(h => {
+                                const hd = new Date(h.date);
+                                return hd >= startDate && hd < endDate;
+                            });
+                        } else {
+                            filteredOrders = allOrdersRaw.filter(o => new Date(o.date || o.createdAt) >= startDate);
+                            filteredHistory = history.filter(h => new Date(h.date) >= startDate);
+                        }
                     }
                 }
 

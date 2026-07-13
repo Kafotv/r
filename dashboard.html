@@ -2194,14 +2194,25 @@
                         <p id="stats-current-date">إليك ملخص شامل لما يحدث في متجرك اليوم</p>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <select id="cro-date-range" onchange="loadAdvancedStats()"
+                        <select id="cro-date-range" onchange="onDateRangeChange()"
                             style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 13px; padding: 8px 15px; border-radius: 12px; outline: none; cursor: pointer; font-weight: 700;">
                             <option value="today" selected style="color: #0f172a;">اليوم</option>
                             <option value="yesterday" style="color: #0f172a;">أمس</option>
                             <option value="7days" style="color: #0f172a;">آخر 7 أيام</option>
                             <option value="30days" style="color: #0f172a;">آخر 30 يوم</option>
+                            <option value="custom" style="color: #0f172a;">فترة مخصصة 📅</option>
                             <option value="all" style="color: #0f172a;">كل الأوقات</option>
                         </select>
+                        
+                        <div id="custom-date-inputs" style="display: none; align-items: center; gap: 8px; background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+                            <span style="font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 700;">من:</span>
+                            <input type="date" id="cro-start-date" onchange="loadAdvancedStats()" 
+                                style="background: transparent; border: none; color: white; font-size: 12px; outline: none; font-weight: 700; cursor: pointer;">
+                            <span style="font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 700;">إلى:</span>
+                            <input type="date" id="cro-end-date" onchange="loadAdvancedStats()" 
+                                style="background: transparent; border: none; color: white; font-size: 12px; outline: none; font-weight: 700; cursor: pointer;">
+                        </div>
+
                         <button class="btn btn-primary"
                             style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 15px; border-radius: 12px;"
                             onclick="loadAdvancedStats()">
@@ -6276,7 +6287,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 
-    <script src="dashboard.js?v=75"></script>
+    <script src="dashboard.js?v=76"></script>
 
     <!-- Intercept ALL server-side form submissions -->
     <script>
