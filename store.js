@@ -1128,14 +1128,16 @@
                 section.style.display = 'block';
                 const nameEl = document.getElementById('distWelcomeName');
                 if (nameEl) nameEl.innerText = 'أهلاً بك، المدير';
-                // Inject admin button
                 if (!document.getElementById('adminDashBtn')) {
                     const adminBtn = document.createElement('a');
                     adminBtn.id = 'adminDashBtn';
                     adminBtn.href = 'dashboard.html';
                     adminBtn.innerHTML = '<i class="fas fa-shield-halved"></i> لوحة التحكم';
-                    adminBtn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:#4f46e5;color:#fff;border-radius:10px;font-weight:800;text-decoration:none;margin:15px;font-size:15px;';
-                    section.prepend(adminBtn);
+                    adminBtn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:12px 25px;background:#4f46e5;color:#fff;border-radius:12px;font-weight:800;text-decoration:none;font-size:14px;font-family:inherit;';
+                    const btnGroup = section.querySelector('.welcome-text + div');
+                    if (btnGroup) {
+                        btnGroup.prepend(adminBtn);
+                    }
                 }
             }
         }
