@@ -402,6 +402,10 @@
                 const getStartDate = (rangeVal) => {
                     const d = new Date();
                     if (rangeVal === 'today') d.setHours(0,0,0,0);
+                    else if (rangeVal === 'yesterday') {
+                        d.setDate(d.getDate() - 1);
+                        d.setHours(0,0,0,0);
+                    }
                     else if (rangeVal === '7days') d.setDate(d.getDate() - 7);
                     else if (rangeVal === '30days') d.setDate(d.getDate() - 30);
                     else return null;
@@ -410,8 +414,21 @@
 
                 const startDate = getStartDate(range);
                 if (startDate) {
-                    filteredOrders = allOrdersRaw.filter(o => new Date(o.date || o.createdAt) >= startDate);
-                    filteredHistory = history.filter(h => new Date(h.date) >= startDate);
+                    if (range === 'yesterday') {
+                        const endDate = new Date(startDate);
+                        endDate.setDate(endDate.getDate() + 1);
+                        filteredOrders = allOrdersRaw.filter(o => {
+                            const od = new Date(o.date || o.createdAt);
+                            return od >= startDate && od < endDate;
+                        });
+                        filteredHistory = history.filter(h => {
+                            const hd = new Date(h.date);
+                            return hd >= startDate && hd < endDate;
+                        });
+                    } else {
+                        filteredOrders = allOrdersRaw.filter(o => new Date(o.date || o.createdAt) >= startDate);
+                        filteredHistory = history.filter(h => new Date(h.date) >= startDate);
+                    }
                 }
 
                 // Calculate Totals for CRO
@@ -430,6 +447,7 @@
                 const revenueTitle = document.getElementById('stat-today-revenue')?.previousElementSibling;
                 if (revenueTitle) {
                     if (range === 'today') revenueTitle.innerText = 'مبيعات اليوم';
+                    else if (range === 'yesterday') revenueTitle.innerText = 'مبيعات أمس';
                     else if (range === '7days') revenueTitle.innerText = 'مبيعات آخر 7 أيام';
                     else if (range === '30days') revenueTitle.innerText = 'مبيعات آخر 30 يوم';
                     else revenueTitle.innerText = 'إجمالي المبيعات';
@@ -437,6 +455,7 @@
                 const ordersTitle = document.getElementById('stat-total-orders-count')?.previousElementSibling;
                 if (ordersTitle) {
                     if (range === 'today') ordersTitle.innerText = 'طلبات اليوم';
+                    else if (range === 'yesterday') ordersTitle.innerText = 'طلبات أمس';
                     else if (range === '7days') ordersTitle.innerText = 'طلبات آخر 7 أيام';
                     else if (range === '30days') ordersTitle.innerText = 'طلبات آخر 30 يوم';
                     else ordersTitle.innerText = 'إجمالي الطلبات';
@@ -444,6 +463,7 @@
                 const aovTitle = document.getElementById('stat-aov')?.previousElementSibling;
                 if (aovTitle) {
                     if (range === 'today') aovTitle.innerText = 'متوسط الطلب اليوم';
+                    else if (range === 'yesterday') aovTitle.innerText = 'متوسط الطلب أمس';
                     else if (range === '7days') aovTitle.innerText = 'متوسط الطلب (7 أيام)';
                     else if (range === '30days') aovTitle.innerText = 'متوسط الطلب (30 يوم)';
                     else aovTitle.innerText = 'متوسط قيمة الطلب';
@@ -451,6 +471,7 @@
                 const visitsTitle = document.getElementById('stat-active-visitors')?.previousElementSibling;
                 if (visitsTitle) {
                     if (range === 'today') visitsTitle.innerText = 'زيارات اليوم';
+                    else if (range === 'yesterday') visitsTitle.innerText = 'زيارات أمس';
                     else if (range === '7days') visitsTitle.innerText = 'زيارات آخر 7 أيام';
                     else if (range === '30days') visitsTitle.innerText = 'زيارات آخر 30 يوم';
                     else visitsTitle.innerText = 'إجمالي الزيارات';

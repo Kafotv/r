@@ -2193,9 +2193,17 @@
                         <h2>نظرة عامة على الأداء 🚀</h2>
                         <p id="stats-current-date">إليك ملخص شامل لما يحدث في متجرك اليوم</p>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <select id="cro-date-range" onchange="loadAdvancedStats()"
+                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 13px; padding: 8px 15px; border-radius: 12px; outline: none; cursor: pointer; font-weight: 700;">
+                            <option value="today" selected style="color: #0f172a;">اليوم</option>
+                            <option value="yesterday" style="color: #0f172a;">أمس</option>
+                            <option value="7days" style="color: #0f172a;">آخر 7 أيام</option>
+                            <option value="30days" style="color: #0f172a;">آخر 30 يوم</option>
+                            <option value="all" style="color: #0f172a;">كل الأوقات</option>
+                        </select>
                         <button class="btn btn-primary"
-                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff;"
+                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 15px; border-radius: 12px;"
                             onclick="loadAdvancedStats()">
                             <i class="fas fa-sync-alt" style="margin-left: 8px;"></i> تحديث البيانات
                         </button>
@@ -2371,13 +2379,6 @@
                                     <i class="fas fa-chart-line" style="color:#818cf8;"></i> أداء التحويل الشامل (CRO)
                                 </h3>
                                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                    <select id="cro-date-range" onchange="loadAdvancedStats()"
-                                        style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 11px; padding: 6px 12px; border-radius: 10px; outline: none; cursor: pointer;">
-                                        <option value="today">اليوم</option>
-                                        <option value="7days" selected>آخر 7 أيام</option>
-                                        <option value="30days">آخر 30 يوم</option>
-                                        <option value="all">كل الأوقات</option>
-                                    </select>
                                     <button class="btn btn-outline"
                                         style="padding: 5px 12px; font-size: 11px; color: #818cf8; border-color: #818cf8; background: white;"
                                         onclick="toggleCroSettings()">
