@@ -53,7 +53,7 @@ window.StoreInit = {
       document.querySelector('meta[name="theme-color"]').content = mainColor;
 
       // Apply title
-      document.title = this.settings.metaTitle || this.settings.storeName || 'متجري';
+      document.title = this.settings.storeName || this.settings.metaTitle || 'متجري';
 
       // Set global vars
       window.storePhone = this.settings.storePhone || '';
