@@ -149,13 +149,21 @@ window.StoreInit = {
       return m ? decodeURIComponent(m[1]) : null;
     };
     const appMatch = hash.match(/app=([^&#]+)/);
-    if (appMatch && appMatch[1] === 'reels') {
-      if (this.settings.reelsEnabled === false) {
-        this._goHome();
+    if (appMatch) {
+      if (appMatch[1] === 'reels') {
+        if (this.settings.reelsEnabled === false) {
+          this._goHome();
+          return;
+        }
+        this._showReelsPage();
         return;
       }
-      this._showReelsPage();
-      return;
+      if (appMatch[1] === 'distributor') {
+        if (window.openDistributorPortal) {
+          window.openDistributorPortal();
+        }
+        return;
+      }
     }
     // If a custom page is displayed and user navigates to product/cat, remove page first
     const hasPageContainer = document.getElementById('customPageContainer');
