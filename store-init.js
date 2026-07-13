@@ -2137,15 +2137,33 @@ window.StoreInit = {
 
   // ── Category Filtering ──────────────────────────────────────────────────────
 
+  _applySort(products, sortVal) {
+    const sorted = [...products];
+    if (sortVal === 'price_asc') {
+      sorted.sort((a, b) => Number(a.price) - Number(b.price));
+    } else if (sortVal === 'price_desc') {
+      sorted.sort((a, b) => Number(b.price) - Number(a.price));
+    } else if (sortVal === 'id_desc') {
+      sorted.sort((a, b) => Number(b.id) - Number(a.id));
+    } else if (sortVal === 'id_asc') {
+      sorted.sort((a, b) => Number(a.id) - Number(b.id));
+    } else if (sortVal === 'title_asc') {
+      sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
+    } else if (sortVal === 'title_desc') {
+      sorted.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'ar'));
+    }
+    return sorted;
+  },
+
   _filterByCategory(catId, sortVal = 'default') {
     this.activeCategory = catId;
     this.activeSort = sortVal;
 
     if (catId === 'all') {
       const homeWrap = document.getElementById('homeSectionsWrap');
-      if (homeWrap) homeWrap.style.display = 'block';
+      if (homeWrap) homeWrap.style.display = 'none';
       const grid = document.getElementById('storeProductsGrid');
-      if (grid) grid.style.display = 'none';
+      if (grid) grid.style.display = 'grid';
       const catPageWrap = document.getElementById('categoryPageWrap');
       if (catPageWrap) catPageWrap.style.display = 'none';
       const footer = document.querySelector('.main-footer');
@@ -2153,7 +2171,13 @@ window.StoreInit = {
       const main = document.querySelector('.main-container');
       if (main) main.style.display = '';
 
-      this._renderHomeSections();
+      // Show all products in grid
+      let visibleProducts = [...this.products].filter(p => !p.advanced || !p.advanced.hiddenProduct);
+      visibleProducts = this._applySort(visibleProducts, sortVal);
+      const gridEl = document.getElementById('storeProductsGrid');
+      if (gridEl) {
+        gridEl.innerHTML = visibleProducts.map(p => this._productCardHTML(p)).join('');
+      }
       this._highlightActiveCategory('all');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -2177,19 +2201,7 @@ window.StoreInit = {
       return cats.includes(String(catId));
     });
 
-    if (sortVal === 'price_asc') {
-      visibleProducts.sort((a, b) => Number(a.price) - Number(b.price));
-    } else if (sortVal === 'price_desc') {
-      visibleProducts.sort((a, b) => Number(b.price) - Number(a.price));
-    } else if (sortVal === 'id_desc') {
-      visibleProducts.sort((a, b) => Number(b.id) - Number(a.id));
-    } else if (sortVal === 'id_asc') {
-      visibleProducts.sort((a, b) => Number(a.id) - Number(b.id));
-    } else if (sortVal === 'title_asc') {
-      visibleProducts.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar'));
-    } else if (sortVal === 'title_desc') {
-      visibleProducts.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'ar'));
-    }
+    visibleProducts = this._applySort(visibleProducts, sortVal);
 
     const content = document.getElementById('publicMarketingContent');
     if (!content) return;
