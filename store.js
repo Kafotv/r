@@ -203,6 +203,8 @@
                 document.getElementById('cartStepItems').style.display = 'block';
                 document.getElementById('cartStepCheckout').style.display = 'none';
                 document.getElementById('cartStepPayment').style.display = 'none';
+                const cartFooter = document.getElementById('cartStepItemsFooter');
+                if (cartFooter) cartFooter.style.display = '';
                 recalculateCartTotals();
                 return;
             }
@@ -221,6 +223,8 @@
                     <button onclick="removeFromCartModal(${i})" style="background:none; border:none; color:#f43f5e; cursor:pointer; font-size:16px;"><i class="fa fa-trash-alt"></i></button>
                 </div>
             `).join('');
+            const cartFooter = document.getElementById('cartStepItemsFooter');
+            if (cartFooter) cartFooter.style.display = '';
             recalculateCartTotals();
         }
 
@@ -347,6 +351,8 @@
         function backToCart() {
             document.getElementById('cartStepItems').style.display = 'block';
             document.getElementById('cartStepCheckout').style.display = 'none';
+            const cartFooter = document.getElementById('cartStepItemsFooter');
+            if (cartFooter) cartFooter.style.display = '';
         }
         function backToCheckout() {
             document.getElementById('cartStepCheckout').style.display = 'block';
@@ -668,6 +674,8 @@
                     if (stepItems) stepItems.style.display = 'block';
                     if (stepCheckout) stepCheckout.style.display = 'none';
                     if (stepPayment) stepPayment.style.display = 'none';
+                    const stepFooter = document.getElementById('cartStepItemsFooter');
+                    if (stepFooter) stepFooter.style.display = 'none';
                     if (itemsContainer) {
                         itemsContainer.innerHTML = `<div style="text-align:center; padding:35px 15px; background:#fff; border-radius:20px; direction:rtl;">
                             <div style="width:80px;height:80px;background:#dcfce7;color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 20px;"><i class="fa fa-check"></i></div>
