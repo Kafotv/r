@@ -2266,7 +2266,55 @@ window.StoreInit = {
       return;
     }
 
+    const homeWrap = document.getElementById('homeSectionsWrap');
+    if (homeWrap) homeWrap.style.display = 'none';
+
+    // Hide product details view
+    if (typeof this._hideProductPage === 'function') this._hideProductPage();
+
+    const isRecommendedView = catId === 'recommended';
+    let visibleProducts = this.products.filter(p => {
+      if (p.advanced && p.advanced.hiddenProduct) return false;
+      if (catId === 'all') return true;
+      if (isRecommendedView) {
+        return p.advanced && p.advanced.isRecommended;
+      }
+      const cats = Array.isArray(p.categories) ? p.categories.map(String) : (p.category ? [String(p.category)] : []);
+      return cats.includes(String(catId));
+    });
+
+    visibleProducts = this._applySort(visibleProducts, sortVal);
+
+    const content = document.getElementById('publicMarketingContent');
+    if (!content) return;
+
+    let catPageWrap = document.getElementById('categoryPageWrap');
+    if (!catPageWrap) {
+      catPageWrap = document.createElement('div');
+      catPageWrap.id = 'categoryPageWrap';
+      content.appendChild(catPageWrap);
+    }
+    catPageWrap.style.display = 'block';
+
+    const grid = document.getElementById('storeProductsGrid');
+    if (grid) grid.style.display = 'none';
+
     if (catId === 'all' && isExplicitAllCatalog) {
+      let breadcrumbsHTML = `
+        <nav class="breadcrumbs" style="margin-bottom:20px; font-size:13px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; gap:8px;">
+          <a href="javascript:void(0)" onclick="StoreInit._goHome()" style="color:inherit; text-decoration:none;">الرئيسية</a>
+          <i class="fa fa-chevron-left" style="font-size:9px;"></i>
+          <span style="color:var(--text);">كل المنتجات</span>
+        </nav>
+      `;
+
+      let categoryHeroHTML = `
+        <div class="category-hero" style="background:var(--gray-100); border-radius:16px; padding:30px 20px; text-align:center; margin-bottom:25px; border:1px solid var(--gray-200);">
+          <h1 style="font-size:24px; font-weight:900; margin:0 0 8px;">تصفح جميع المنتجات</h1>
+          <p style="font-size:13px; color:var(--gray-600); margin:0;">اكتشف كافة التشكيلات والمجموعات المتوفرة في المتجر</p>
+        </div>
+      `;
+
       const sortHTML = `
         <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
             <h2 class="section-title" style="margin:0;">جميع المنتجات <span style="font-size:14px; font-weight:400; color:var(--gray-400); margin-right:8px;">(${visibleProducts.length} منتج)</span></h2>
@@ -2298,10 +2346,6 @@ window.StoreInit = {
       return;
     }
 
-    const homeWrap = document.getElementById('homeSectionsWrap');
-    if (homeWrap) homeWrap.style.display = 'none';
-
-    const isRecommendedView = catId === 'recommended';
     const catObj = isRecommendedView 
       ? { name: 'منتجات موصى بها ⭐', description: 'أفضل الخيارات والمنتجات التي نوصي بها لعملائنا' }
       : (this.categories ? this.categories.find(c => String(c.id) === String(catId)) : null);
