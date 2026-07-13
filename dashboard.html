@@ -1526,6 +1526,9 @@
             <div class="nav-item tab-link active" data-target="tab-stats">
                 <div class="nav-item-content"><i class="fas fa-chart-pie main-icon"></i> الإحصائيات</div>
             </div>
+            <div class="nav-item tab-link" data-target="tab-monthly">
+                <div class="nav-item-content"><i class="fas fa-calendar-alt main-icon"></i> التقرير الشهري</div>
+            </div>
 
             <div class="nav-dropdown">
                 <div class="nav-item" onclick="toggleDropdown(this)">
@@ -5616,6 +5619,24 @@
                         </div>
                     </div>
                 </form>
+            </div>
+            <!-- Monthly Report -->
+            <div id="tab-monthly" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header" style="flex-wrap:wrap;gap:15px;">
+                        <h3 class="panel-title"><i class="fas fa-calendar-alt" style="color:var(--primary);margin-left:10px;"></i> التقرير الشهري</h3>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            <input type="month" id="reportMonth" class="input-luxury" style="padding:8px 15px;font-size:13px;width:auto;" onchange="loadMonthlyReport()">
+                            <button class="btn btn-outline" onclick="loadMonthlyReport()" style="padding:8px 15px;font-size:13px;"><i class="fas fa-sync"></i> تحديث</button>
+                        </div>
+                    </div>
+                    <div id="monthlyReportContent" style="padding:20px;">
+                        <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                            <i class="fas fa-calendar-alt" style="font-size:48px;opacity:0.3;margin-bottom:15px;display:block;"></i>
+                            <p style="font-weight:700;font-size:16px;">اختر الشهر لعرض التقرير</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div> <!-- /.content-area -->
     </div> <!-- /.main-wrapper -->

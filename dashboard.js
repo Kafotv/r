@@ -95,6 +95,7 @@
             }
             if (targetId === 'tab-products') renderProductsTable();
             if (targetId === 'tab-orders') renderOrdersTable();
+            if (targetId === 'tab-monthly') loadMonthlyReport();
 
             if(updateUrl) {
                 const newUrl = new URL(window.location);
@@ -10624,6 +10625,182 @@ function printOrderInvoice() {
     `);
     printWindow.document.close();
 }
+
+        // --- Monthly Report ---
+        function loadMonthlyReport() {
+            const container = document.getElementById('monthlyReportContent');
+            if (!container) return;
+            
+            const monthInput = document.getElementById('reportMonth');
+            // Set default to current month if empty
+            if (!monthInput.value) {
+                const now = new Date();
+                monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            }
+            const [year, mon] = monthInput.value.split('-');
+            const monthNames = ['يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+            const monthName = monthNames[parseInt(mon) - 1] || mon;
+
+            const orders = window.storeOrdersData || [];
+            const monthOrders = orders.filter(o => {
+                const d = new Date(o.date || o.createdAt);
+                return !isNaN(d.getTime()) && d.getFullYear() == parseInt(year) && (d.getMonth() + 1) == parseInt(mon);
+            });
+
+            const totalOrders = monthOrders.length;
+            const totalRevenue = monthOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+            const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+            // Count products sold
+            const productMap = {};
+            monthOrders.forEach(o => {
+                (o.items || []).forEach(item => {
+                    const key = item.id || item.productId || item.name || 'unknown';
+                    if (!productMap[key]) {
+                        productMap[key] = { name: item.name || 'منتج', qty: 0, total: 0, price: parseFloat(item.price) || 0 };
+                    }
+                    const qty = parseInt(item.quantity) || 1;
+                    productMap[key].qty += qty;
+                    productMap[key].total += productMap[key].price * qty;
+                });
+            });
+            const totalItems = Object.values(productMap).reduce((s, p) => s + p.qty, 0);
+            const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty);
+
+            // Daily breakdown
+            const dailyMap = {};
+            monthOrders.forEach(o => {
+                const d = new Date(o.date || o.createdAt);
+                const day = d.getDate();
+                dailyMap[day] = dailyMap[day] || { count: 0, revenue: 0 };
+                dailyMap[day].count++;
+                dailyMap[day].revenue += parseFloat(o.total) || 0;
+            });
+
+            const daysInMonth = new Date(parseInt(year), parseInt(mon), 0).getDate();
+            let dailyHTML = '';
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dayData = dailyMap[d] || { count: 0, revenue: 0 };
+                dailyHTML += `
+                    <tr>
+                        <td style="padding:8px 12px;font-weight:700;">${d}</td>
+                        <td style="padding:8px 12px;">${dayData.count}</td>
+                        <td style="padding:8px 12px;font-weight:800;color:var(--primary);">${dayData.revenue.toFixed(2)} ₪</td>
+                    </tr>
+                `;
+            }
+
+            container.innerHTML = `
+                <div style="margin-bottom:20px;">
+                    <h4 style="font-weight:900;font-size:20px;margin:0 0 5px 0;color:var(--dark);">${monthName} ${year}</h4>
+                    <p style="margin:0;font-size:13px;color:var(--text-muted);">${totalOrders} طلب — ${totalItems} منتج مباع</p>
+                </div>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:25px;">
+                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
+                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">إجمالي المبيعات</div>
+                        <div style="font-size:28px;font-weight:900;color:var(--primary);">${totalRevenue.toFixed(2)} ₪</div>
+                    </div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
+                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">عدد الطلبات</div>
+                        <div style="font-size:28px;font-weight:900;color:var(--dark);">${totalOrders}</div>
+                    </div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
+                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">متوسط قيمة الطلب</div>
+                        <div style="font-size:28px;font-weight:900;color:#10b981;">${avgOrder.toFixed(2)} ₪</div>
+                    </div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
+                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">منتجات مباعة</div>
+                        <div style="font-size:28px;font-weight:900;color:#f59e0b;">${totalItems}</div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:25px;">
+                    <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+                        <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
+                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-crown" style="color:#f59e0b;margin-left:8px;"></i> الأكثر مبيعاً</h4>
+                        </div>
+                        <div style="padding:0;">
+                            ${topProducts.length > 0 ? `
+                            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                                <thead>
+                                    <tr style="background:#f8fafc;">
+                                        <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">المنتج</th>
+                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الكمية</th>
+                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الإجمالي</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${topProducts.slice(0, 20).map((p, i) => `
+                                        <tr style="border-top:1px solid #f1f5f9;">
+                                            <td style="padding:10px 15px;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                                <span style="width:22px;height:22px;border-radius:50%;background:${i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : '#f1f5f9'};color:${i < 3 ? 'white' : 'var(--text-muted)'};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0;">${i + 1}</span>
+                                                ${p.name}
+                                            </td>
+                                            <td style="padding:10px 15px;text-align:center;font-weight:800;">${p.qty}</td>
+                                            <td style="padding:10px 15px;text-align:center;font-weight:800;color:var(--primary);">${p.total.toFixed(2)} ₪</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>` : '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">لا توجد مبيعات هذا الشهر</div>'}
+                        </div>
+                    </div>
+
+                    <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+                        <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
+                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-calendar-day" style="color:var(--primary);margin-left:8px;"></i> توزيع المبيعات اليومي</h4>
+                        </div>
+                        <div style="padding:0;max-height:400px;overflow-y:auto;">
+                            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                                <thead>
+                                    <tr style="background:#f8fafc;position:sticky;top:0;">
+                                        <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">اليوم</th>
+                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الطلبات</th>
+                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الإيرادات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${dailyHTML}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
+                        <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-list" style="color:var(--primary);margin-left:8px;"></i> طلبات الشهر (${totalOrders})</h4>
+                    </div>
+                    <div style="max-height:500px;overflow-y:auto;">
+                        ${monthOrders.length > 0 ? `
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                            <thead>
+                                <tr style="background:#f8fafc;position:sticky;top:0;">
+                                    <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">#</th>
+                                    <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">العميل</th>
+                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">المبلغ</th>
+                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الحالة</th>
+                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">التاريخ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${monthOrders.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).map(o => `
+                                    <tr style="border-top:1px solid #f1f5f9;cursor:pointer;" onclick="viewOrder('${o.id}')" class="hover-row">
+                                        <td style="padding:10px 15px;font-weight:800;color:var(--primary);">#${o.id}</td>
+                                        <td style="padding:10px 15px;font-weight:700;">${o.customer?.name || o.customerName || '—'}</td>
+                                        <td style="padding:10px 15px;text-align:center;font-weight:800;color:var(--primary);">${(parseFloat(o.total) || 0).toFixed(2)} ₪</td>
+                                        <td style="padding:10px 15px;text-align:center;">
+                                            <span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;background:${o.status === 'مكتمل' ? '#f0fdf4' : '#fffbeb'};color:${o.status === 'مكتمل' ? '#166534' : '#92400e'};border:1px solid ${o.status === 'مكتمل' ? '#bbf7d0' : '#fef3c7'};">${o.status}</span>
+                                        </td>
+                                        <td style="padding:10px 15px;text-align:center;font-size:12px;color:var(--text-muted);">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>` : '<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:14px;">لا توجد طلبات هذا الشهر</div>'}
+                    </div>
+                </div>
+            `;
+        }
 
 window.addNewPopupCampaign = addNewPopupCampaign;
 window.deletePopupCampaign = deletePopupCampaign;
