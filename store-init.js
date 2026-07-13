@@ -173,6 +173,46 @@ window.StoreInit = {
     const productId = getParam('product', hash) || getParam('product', query);
     if (productId) {
       if (hasPageContainer) { if (store) store.style.display = ''; if (main) main.style.display = ''; if (footer) footer.style.display = 'block'; hasPageContainer.remove(); }
+      
+      const page = document.getElementById('productPage');
+      if (page) {
+        page.style.display = 'block';
+        page.innerHTML = `
+          <div class="product-page-wrapper" style="max-width: 1450px; margin: 40px auto; padding: 0 5%; box-sizing: border-box;">
+            <div class="product-detail-view" style="background: #fff; border-radius: 20px; padding: 30px; border: 1px solid #eee;">
+              <div class="product-main-info" style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+                <div class="product-media" style="width: 45%; min-width: 290px;">
+                  <div class="skeleton" style="width: 100%; aspect-ratio: 1; border-radius: 15px;"></div>
+                  <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div class="skeleton" style="width: 70px; height: 70px; border-radius: 12px; flex-shrink: 0;"></div>
+                    <div class="skeleton" style="width: 70px; height: 70px; border-radius: 12px; flex-shrink: 0;"></div>
+                    <div class="skeleton" style="width: 70px; height: 70px; border-radius: 12px; flex-shrink: 0;"></div>
+                  </div>
+                </div>
+                <div class="product-details" style="flex: 1; min-width: 290px; display: flex; flex-direction: column; gap: 16px;">
+                  <div class="skeleton" style="width: 40%; height: 12px; border-radius: 6px;"></div>
+                  <div class="skeleton" style="width: 80%; height: 28px; border-radius: 8px; margin-top: 10px;"></div>
+                  <div class="skeleton" style="width: 30%; height: 24px; border-radius: 6px; margin-top: 8px;"></div>
+                  <div class="skeleton" style="width: 100%; height: 60px; border-radius: 12px; margin-top: 20px;"></div>
+                  <div class="skeleton" style="width: 100%; height: 50px; border-radius: 12px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <style>
+            .skeleton {
+              background: linear-gradient(90deg, #f8fafc 25%, #e2e8f0 50%, #f8fafc 75%);
+              background-size: 200% 100%;
+              animation: skeleton-loading 1.5s infinite linear;
+            }
+            @keyframes skeleton-loading {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          </style>
+        `;
+      }
+
       const tryOpen = () => {
         const product = this.products.find(p => String(p.id) === String(productId));
         if (product) {
