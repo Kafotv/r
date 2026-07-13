@@ -579,8 +579,9 @@ const DB = (() => {
       const cityMap = {};
       orders.forEach(o => {
         const city = o.customer ? o.customer.city : 'غير محدد';
-        if (!cityMap[city]) cityMap[city] = { name: city, revenue: 0 };
+        if (!cityMap[city]) cityMap[city] = { name: city, revenue: 0, count: 0 };
         cityMap[city].revenue += parseFloat(o.total || 0);
+        cityMap[city].count += 1;
       });
 
       // Top products
@@ -610,7 +611,7 @@ const DB = (() => {
           totalOrders: orders.length
         },
         history: analytics.history,
-        cityStats: Object.values(cityMap).sort((a, b) => b.revenue - a.revenue),
+        cityStats: Object.values(cityMap).sort((a, b) => b.count - a.count),
         topProducts: Object.values(prodMap).sort((a, b) => b.count - a.count).slice(0, 10)
       };
     },
