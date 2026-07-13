@@ -2414,12 +2414,8 @@ window.StoreInit = {
     // Update tab buttons
     btn.parentElement.querySelectorAll('.cat-tab-btn').forEach(b => {
       b.classList.remove('active');
-      b.style.background = 'var(--gray-100)';
-      b.style.color = 'var(--dark)';
     });
     btn.classList.add('active');
-    btn.style.background = 'var(--primary)';
-    btn.style.color = '#fff';
 
     // Show corresponding panel
     const container = btn.closest('.cat-tabs-container').parentElement;
@@ -2781,7 +2777,7 @@ window.StoreInit = {
         const header = s.title ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:30px 0 15px;width:100%;"><h2 class="section-title" style="font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin:0;"><i class="fas fa-tags" style="color:var(--primary);"></i> ${s.title}</h2></div>` : '';
         
         // Build tabs
-        const tabsHTML = selectedCats.map((cat, i) => `<button class="cat-tab-btn${i === 0 ? ' active' : ''}" data-cat="${cat.id}" onclick="StoreInit._switchCategoryTab(this, '${cat.id}')" style="padding:10px 18px;border:none;background:${i === 0 ? 'var(--primary)' : 'var(--gray-100)'};color:${i === 0 ? '#fff' : 'var(--dark)'};border-radius:50px;font-weight:800;font-size:13px;cursor:pointer;transition:0.2s;white-space:nowrap;">${cat.name}</button>`).join('');
+        const tabsHTML = selectedCats.map((cat, i) => `<button class="cat-tab-btn${i === 0 ? ' active' : ''}" data-cat="${cat.id}" onclick="StoreInit._switchCategoryTab(this, '${cat.id}')">${cat.name}</button>`).join('');
         
         // Build panels
         const panelsHTML = selectedCats.map((cat, i) => {
@@ -2793,7 +2789,7 @@ window.StoreInit = {
           return `<div class="cat-tab-panel${i === 0 ? ' active' : ''}" data-cat="${cat.id}" style="display:${i === 0 ? 'grid' : 'none'};">${gridOf(list)}</div>`;
         }).join('');
         
-        return `<div style="margin:30px 0;">${header}<div class="cat-tabs-container" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">${tabsHTML}</div>${panelsHTML}</div>`;
+        return `<div style="margin:30px 0;">${header}<div class="cat-tabs-container">${tabsHTML}</div>${panelsHTML}</div>`;
       }
       case 'logo_marquee': {
         const logos = s.logos || [];
