@@ -8,6 +8,11 @@
     <meta name="theme-color" content="#fa0000">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+    <script>
+        if (window.location.hash && (window.location.hash.includes('product=') || window.location.hash.includes('category=') || window.location.hash.includes('page='))) {
+            document.write('<style>#publicMarketingContent { display: none !important; }</style>');
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
