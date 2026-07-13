@@ -2026,6 +2026,29 @@ window.StoreInit = {
 
       grid.addEventListener('scroll', updateIndicators, { passive: true });
       updateIndicators();
+
+      // Autoplay every 4 seconds
+      let currentPageIdx = 0;
+      const autoplay = setInterval(() => {
+        if (grid.offsetWidth === 0 || grid.offsetHeight === 0) return;
+        currentPageIdx = (currentPageIdx + 1) % pages;
+        const itemWidth = grid.clientWidth;
+        const isRTL = getComputedStyle(grid).direction === 'rtl';
+        const targetScroll = currentPageIdx * itemWidth;
+        grid.scrollTo({
+          left: isRTL ? -targetScroll : targetScroll,
+          behavior: 'smooth'
+        });
+      }, 4000);
+
+      // Pause autoplay on user touch or click
+      const stopAutoplay = () => {
+        clearInterval(autoplay);
+        grid.removeEventListener('touchstart', stopAutoplay);
+        grid.removeEventListener('mousedown', stopAutoplay);
+      };
+      grid.addEventListener('touchstart', stopAutoplay, { passive: true });
+      grid.addEventListener('mousedown', stopAutoplay, { passive: true });
     });
   },
 
