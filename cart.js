@@ -1,9 +1,16 @@
 // ── Sound Effects (Web Audio API - No external files needed) ──────────────────
-const _audioCtx = () => new (window.AudioContext || window.webkitAudioContext)();
+let _sharedCtx = null;
+function _getAudioCtx() {
+    if (!_sharedCtx || _sharedCtx.state === 'closed') {
+        _sharedCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (_sharedCtx.state === 'suspended') _sharedCtx.resume();
+    return _sharedCtx;
+}
 
 function playAddToCartSound() {
     try {
-        const ctx = _audioCtx();
+        const ctx = _getAudioCtx();
         [0, 0.12].forEach((delay, i) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -20,7 +27,7 @@ function playAddToCartSound() {
 
 function playQuantitySound() {
     try {
-        const ctx = _audioCtx();
+        const ctx = _getAudioCtx();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);
@@ -35,7 +42,7 @@ function playQuantitySound() {
 
 function playRemoveSound() {
     try {
-        const ctx = _audioCtx();
+        const ctx = _getAudioCtx();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain); gain.connect(ctx.destination);

@@ -5,7 +5,7 @@
 
         function playSfx(type) {
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = typeof _getAudioCtx === 'function' ? _getAudioCtx() : new (window.AudioContext || window.webkitAudioContext)();
                 if (type === 'add') {
                     [[523, 0], [784, 0.13]].forEach(([freq, delay]) => {
                         const osc = ctx.createOscillator();
@@ -495,7 +495,7 @@
 
         function playSuccessSound() {
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = typeof _getAudioCtx === 'function' ? _getAudioCtx() : new (window.AudioContext || window.webkitAudioContext)();
                 [{ f: 523.25, d: 0.15 }, { f: 659.25, d: 0.15 }, { f: 783.99, d: 0.15 }, { f: 1046.50, d: 0.40 }]
                 .forEach((note, index) => {
                     const delay = index * 0.12;
