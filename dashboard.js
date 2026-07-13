@@ -420,11 +420,47 @@
                 const checkouts = filteredHistory.reduce((s, h) => s + (h.init_checkout || 0), 0);
                 const ordersCount = filteredOrders.length;
 
-                // 1. Update Super Stats Cards (Always All Time or Today based on summary)
-                document.getElementById('stat-today-revenue').innerText = `₪${parseFloat(summary.todayRevenue || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-                document.getElementById('stat-total-orders-count').innerText = (summary.totalOrders || 0).toLocaleString();
-                document.getElementById('stat-aov').innerText = `₪${parseFloat(summary.avgOrderValue || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-                document.getElementById('stat-active-visitors').innerText = (summary.totalVisits || 0).toLocaleString();
+                // 1. Update Super Stats Cards based on selected range
+                const rangeRevenue = filteredOrders.reduce((s, o) => s + parseFloat(o.total || 0), 0);
+                const rangeOrdersCount = filteredOrders.length;
+                const rangeAOV = rangeOrdersCount > 0 ? (rangeRevenue / rangeOrdersCount) : 0;
+                const rangeVisits = filteredHistory.reduce((s, h) => s + (h.visits || h.visit || 0), 0);
+
+                // Update Titles dynamically
+                const revenueTitle = document.getElementById('stat-today-revenue')?.previousElementSibling;
+                if (revenueTitle) {
+                    if (range === 'today') revenueTitle.innerText = 'مبيعات اليوم';
+                    else if (range === '7days') revenueTitle.innerText = 'مبيعات آخر 7 أيام';
+                    else if (range === '30days') revenueTitle.innerText = 'مبيعات آخر 30 يوم';
+                    else revenueTitle.innerText = 'إجمالي المبيعات';
+                }
+                const ordersTitle = document.getElementById('stat-total-orders-count')?.previousElementSibling;
+                if (ordersTitle) {
+                    if (range === 'today') ordersTitle.innerText = 'طلبات اليوم';
+                    else if (range === '7days') ordersTitle.innerText = 'طلبات آخر 7 أيام';
+                    else if (range === '30days') ordersTitle.innerText = 'طلبات آخر 30 يوم';
+                    else ordersTitle.innerText = 'إجمالي الطلبات';
+                }
+                const aovTitle = document.getElementById('stat-aov')?.previousElementSibling;
+                if (aovTitle) {
+                    if (range === 'today') aovTitle.innerText = 'متوسط الطلب اليوم';
+                    else if (range === '7days') aovTitle.innerText = 'متوسط الطلب (7 أيام)';
+                    else if (range === '30days') aovTitle.innerText = 'متوسط الطلب (30 يوم)';
+                    else aovTitle.innerText = 'متوسط قيمة الطلب';
+                }
+                const visitsTitle = document.getElementById('stat-active-visitors')?.previousElementSibling;
+                if (visitsTitle) {
+                    if (range === 'today') visitsTitle.innerText = 'زيارات اليوم';
+                    else if (range === '7days') visitsTitle.innerText = 'زيارات آخر 7 أيام';
+                    else if (range === '30days') visitsTitle.innerText = 'زيارات آخر 30 يوم';
+                    else visitsTitle.innerText = 'إجمالي الزيارات';
+                }
+
+                // Update Values
+                document.getElementById('stat-today-revenue').innerText = `₪${rangeRevenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                document.getElementById('stat-total-orders-count').innerText = rangeOrdersCount.toLocaleString();
+                document.getElementById('stat-aov').innerText = `₪${rangeAOV.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+                document.getElementById('stat-active-visitors').innerText = rangeVisits.toLocaleString();
 
                 // 2. Render CRO Grid Dynamically
                 const grid = document.getElementById('cro-metrics-grid');
