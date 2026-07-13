@@ -559,9 +559,12 @@
                 if (cityPerformanceList) {
                     const displayCities = cityStats.slice(0, 10);
                     cityPerformanceList.innerHTML = displayCities.length ? displayCities.map(c => `
-                        <div class="city-tag" style="padding: 8px 12px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center;">
+                        <div class="city-tag" style="padding: 8px 12px; margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
                             <span style="font-size:12px; font-weight:700;"><i class="fas fa-location-arrow" style="font-size:9px; margin-left:5px; opacity:0.5;"></i> ${c.name}</span>
-                            <span style="font-size:11px; font-weight:800; color:var(--primary);">${c.count || 0} طلبات</span>
+                            <div style="text-align: left; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2;">
+                                <span style="font-size:11px; font-weight:800; color:var(--primary);">${c.count || 0} طلبات</span>
+                                <span style="font-size:10px; color:var(--text-muted); font-weight: 700;">₪${parseFloat(c.revenue || 0).toLocaleString()}</span>
+                            </div>
                         </div>
                     `).join('') : '<p style="text-align:center; padding:20px; color:#94a3b8; font-size:12px;">سيتم عرض أداء المدن عند توفر الطلبات</p>';
                 }
