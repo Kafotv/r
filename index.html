@@ -10,12 +10,18 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
     <script>
         if (window.location.hash && (window.location.hash.includes('product=') || window.location.hash.includes('category=') || window.location.hash.includes('page='))) {
-            document.write('<style>#publicMarketingContent { display: none !important; } #productPage { display: block !important; }</style>');
+            document.documentElement.classList.add('route-product-page');
         }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        .route-product-page #publicMarketingContent {
+            display: none !important;
+        }
+        .route-product-page #productPage {
+            display: block !important;
+        }
         .skeleton {
             background: linear-gradient(90deg, #f8fafc 25%, #e2e8f0 50%, #f8fafc 75%);
             background-size: 200% 100%;
@@ -1071,7 +1077,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 
     <script src="cart.js?v=3"></script>
-    <script src="store-init.js?v=70"></script>
+    <script src="store-init.js?v=71"></script>
     <script src="store.js?v=26"></script>
 </body>
 

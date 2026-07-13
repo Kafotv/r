@@ -172,6 +172,12 @@ window.StoreInit = {
     const footer = document.querySelector('.main-footer');
     const productId = getParam('product', hash) || getParam('product', query);
     if (productId) {
+      document.documentElement.classList.add('route-product-page');
+    } else {
+      document.documentElement.classList.remove('route-product-page');
+    }
+
+    if (productId) {
       if (hasPageContainer) { if (store) store.style.display = ''; if (main) main.style.display = ''; if (footer) footer.style.display = 'block'; hasPageContainer.remove(); }
       
       const page = document.getElementById('productPage');
