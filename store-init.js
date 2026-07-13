@@ -2351,7 +2351,7 @@ window.StoreInit = {
       : (this.categories ? this.categories.find(c => String(c.id) === String(catId)) : null);
     const parentObj = catObj && catObj.parentId ? this.categories.find(c => String(c.id) === String(catObj.parentId)) : null;
 
-    let visibleProducts = this.products.filter(p => {
+    visibleProducts = this.products.filter(p => {
       if (p.advanced && p.advanced.hiddenProduct) return false;
       if (isRecommendedView) {
         return p.advanced && p.advanced.isRecommended;
@@ -2362,10 +2362,8 @@ window.StoreInit = {
 
     visibleProducts = this._applySort(visibleProducts, sortVal);
 
-    const content = document.getElementById('publicMarketingContent');
     if (!content) return;
 
-    let catPageWrap = document.getElementById('categoryPageWrap');
     if (!catPageWrap) {
       catPageWrap = document.createElement('div');
       catPageWrap.id = 'categoryPageWrap';
@@ -2373,8 +2371,8 @@ window.StoreInit = {
     }
     catPageWrap.style.display = 'block';
 
-    const grid = document.getElementById('storeProductsGrid');
-    if (grid) grid.style.display = 'none';
+    const gridEl = document.getElementById('storeProductsGrid');
+    if (gridEl) gridEl.style.display = 'none';
 
     let breadcrumbsHTML = `
       <nav class="breadcrumbs" style="margin-bottom:20px; font-size:13px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; gap:8px;">
