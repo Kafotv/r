@@ -1366,7 +1366,7 @@ header {
     bottom: 25px;
     left: 50%;
     transform: translateX(-50%) translateY(100px);
-    background: var(--primary);
+    background: var(--dark);
     color: var(--white);
     padding: 12px 25px;
     border-radius: 50px;
@@ -1386,7 +1386,7 @@ header {
 
 .floating-cart-bar i {
     font-size: 18px;
-    color: var(--white);
+    color: var(--primary);
 }
 
 .floating-cart-bar .cart-text {
