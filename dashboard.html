@@ -2603,6 +2603,24 @@
                             </tbody>
                         </table>
                     </div>
+                    <div id="ordersPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span id="paginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                            <select id="paginationPerPage" onchange="changeOrdersPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <button onclick="goToOrdersPage('first')" id="paginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                            <button onclick="goToOrdersPage('prev')" id="paginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                            <span id="paginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                            <button onclick="goToOrdersPage('next')" id="paginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                            <button onclick="goToOrdersPage('last')" id="paginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

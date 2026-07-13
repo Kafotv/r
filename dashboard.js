@@ -2325,11 +2325,14 @@
             }
         }
         
-        // --- Orders Table Rendering ---
+        // --- Orders Table Rendering with Pagination ---
+        let ordersPage = 1;
+        let ordersPerPage = 50;
+
         function renderOrdersTable() {
             const tbody = document.getElementById('ordersTableBody') || document.querySelector('#ordersTable tbody');
             if (!tbody) return;
-            
+
             if (window.storeOrdersData === undefined) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الطلبات...</td></tr>';
                 DB.getOrders().then(orders => {
@@ -2341,14 +2344,24 @@
                 });
                 return;
             }
-            
+
             const orders = window.storeOrdersData;
             if (!orders.length) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);">لا توجد طلبات بعد</td></tr>';
+                document.getElementById('ordersPagination').style.display = 'none';
                 return;
             }
-            
-            tbody.innerHTML = orders.map((o, index) => {
+
+            const totalItems = orders.length;
+            const totalPages = Math.ceil(totalItems / ordersPerPage);
+            if (ordersPage > totalPages) ordersPage = totalPages;
+            if (ordersPage < 1) ordersPage = 1;
+
+            const start = (ordersPage - 1) * ordersPerPage;
+            const pageOrders = orders.slice(start, start + ordersPerPage);
+            const globalStart = start;
+
+            tbody.innerHTML = pageOrders.map((o, i) => {
                 const cust = o.customer || {};
                 const name = cust.name || o.customerName || '—';
                 const phone = cust.phone || o.customerPhone || '—';
@@ -2360,7 +2373,7 @@
                 const ipCountry = o.ipCountry || o.ip_country || '—';
                 const filledFields = [name, phone, address, items, total].filter(f => f && f !== '—').length;
                 const completion = Math.round((filledFields / 5) * 100);
-                
+
                 const statusColors = {
                     'مكتمل': { bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
                     'جديد': { bg: '#fffbeb', color: '#92400e', border: '#fef3c7' },
@@ -2368,10 +2381,10 @@
                     'ملغي': { bg: '#fef2f2', color: '#991b1b', border: '#fecaca' }
                 };
                 const sc = statusColors[status] || { bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' };
-                
+
                 return `
                     <tr data-id="${o.id}">
-                        <td style="text-align:center;font-size:11px;">${index + 1}</td>
+                        <td style="text-align:center;font-size:11px;">${globalStart + i + 1}</td>
                         <td>
                             <div style="font-weight:700;">${name}</div>
                             <div style="font-size:11px;color:#94a3b8;">${phone}</div>
@@ -2401,6 +2414,61 @@
                         </td>
                     </tr>`;
             }).join('');
+
+            updatePaginationUI(totalItems, totalPages);
+        }
+
+        function updatePaginationUI(totalItems, totalPages) {
+            const pagination = document.getElementById('ordersPagination');
+            if (!pagination) return;
+            pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+
+            document.getElementById('paginationInfo').textContent = `إجمالي ${totalItems} طلب — صفحة ${ordersPage} من ${totalPages}`;
+
+            const pagesContainer = document.getElementById('paginationPages');
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, ordersPage - range);
+            const end = Math.min(totalPages, ordersPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToOrdersPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToOrdersPage(${p})" style="padding:6px 10px;border:1px solid ${p === ordersPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === ordersPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === ordersPage ? '800' : '400'};color:${p === ordersPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToOrdersPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pagesContainer.innerHTML = pagesHTML;
+
+            document.getElementById('paginationFirst').style.opacity = ordersPage <= 1 ? '0.3' : '1';
+            document.getElementById('paginationFirst').disabled = ordersPage <= 1;
+            document.getElementById('paginationPrev').style.opacity = ordersPage <= 1 ? '0.3' : '1';
+            document.getElementById('paginationPrev').disabled = ordersPage <= 1;
+            document.getElementById('paginationNext').style.opacity = ordersPage >= totalPages ? '0.3' : '1';
+            document.getElementById('paginationNext').disabled = ordersPage >= totalPages;
+            document.getElementById('paginationLast').style.opacity = ordersPage >= totalPages ? '0.3' : '1';
+            document.getElementById('paginationLast').disabled = ordersPage >= totalPages;
+        }
+
+        function goToOrdersPage(page) {
+            const totalPages = Math.ceil((window.storeOrdersData || []).length / ordersPerPage);
+            if (page === 'first') page = 1;
+            else if (page === 'last') page = totalPages;
+            else if (page === 'prev') page = Math.max(1, ordersPage - 1);
+            else if (page === 'next') page = Math.min(totalPages, ordersPage + 1);
+            else page = Math.max(1, Math.min(totalPages, Number(page)));
+            if (page === ordersPage) return;
+            ordersPage = page;
+            renderOrdersTable();
+        }
+
+        function changeOrdersPerPage(val) {
+            ordersPerPage = Number(val);
+            ordersPage = 1;
+            renderOrdersTable();
         }
         function loadWholesalePricesUI() {
             const tbody = document.getElementById('wholesalePricesBody');
