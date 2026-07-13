@@ -1999,16 +1999,31 @@ window.StoreInit = {
       if (totalItems <= 3) { indicators.innerHTML = ''; return; }
       const pages = Math.ceil(totalItems / 3);
       indicators.innerHTML = Array.from({ length: pages }, (_, i) => 
-        `<span${i === 0 ? ' class="active"' : ''}></span>`
+        `<span${i === 0 ? ' class="active"' : ''} style="cursor:pointer;" data-page="${i}"></span>`
       ).join('');
+      
       const updateIndicators = () => {
-        const scrollLeft = grid.scrollLeft;
-        const itemWidth = grid.clientWidth;
-        const currentPage = Math.round(scrollLeft / itemWidth);
+        const scrollLeft = Math.abs(grid.scrollLeft);
+        const itemWidth = grid.clientWidth || 1;
+        const currentPage = Math.min(pages - 1, Math.max(0, Math.round(scrollLeft / itemWidth)));
         indicators.querySelectorAll('span').forEach((dot, i) => {
           dot.classList.toggle('active', i === currentPage);
         });
       };
+
+      indicators.querySelectorAll('span').forEach(dot => {
+        dot.addEventListener('click', (e) => {
+          const p = parseInt(e.target.getAttribute('data-page'));
+          const itemWidth = grid.clientWidth;
+          const isRTL = getComputedStyle(grid).direction === 'rtl';
+          const targetScroll = p * itemWidth;
+          grid.scrollTo({
+            left: isRTL ? -targetScroll : targetScroll,
+            behavior: 'smooth'
+          });
+        });
+      });
+
       grid.addEventListener('scroll', updateIndicators, { passive: true });
       updateIndicators();
     });
