@@ -2049,6 +2049,11 @@ header {
     .old-price {
         font-size: 11px;
     }
+
+    #distWholesaleGrid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
 }
 
 .logo-marquee-container {

@@ -1154,6 +1154,7 @@
                 const nameEl = document.getElementById('distWelcomeName');
                 if (nameEl) nameEl.innerText = `أهلاً بك، ${localStorage.getItem('distributorName') || ''}`;
                 loadDistWholesaleProducts(phone);
+                if (typeof window.switchDistSubTab === 'function') window.switchDistSubTab('orders');
             }
         }
 
