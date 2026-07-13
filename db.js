@@ -587,7 +587,13 @@ const DB = (() => {
       const prodMap = {};
       orders.forEach(o => {
         (o.items || []).forEach(item => {
-          if (!prodMap[item.id]) prodMap[item.id] = { id: item.id, name: item.name, image: item.image, count: 0, revenue: 0 };
+          const currentProd = products.find(p => String(p.id) === String(item.id));
+          const prodImage = currentProd ? currentProd.image : item.image;
+          const prodName = currentProd ? currentProd.name : item.name;
+          
+          if (!prodMap[item.id]) {
+            prodMap[item.id] = { id: item.id, name: prodName, image: prodImage, count: 0, revenue: 0 };
+          }
           const qty = parseInt(item.quantity || 1);
           prodMap[item.id].count += qty;
           prodMap[item.id].revenue += parseFloat(item.price || 0) * qty;
