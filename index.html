@@ -957,7 +957,6 @@
 
                 <div class="cats-section-label">الأقسام</div>
                 <div class="cats-mobile-list"></div>
-                <div class="cats-mobile-indicators"></div>
 
                 <div class="cats-section-label" style="margin-top:20px;">العلامات التجارية</div>
                 <div class="cats-brands-grid"></div>
@@ -985,19 +984,16 @@
         .cats-all-link:active { background: var(--primary-light); transform: scale(0.98); }
         .cats-chevron-icon { font-size: 11px; opacity: 0.5; }
         .cats-section-label { font-size: 11px; font-weight: 900; color: var(--gray-400); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; padding-right: 4px; }
-        .cats-mobile-list { display: flex; flex-direction: row; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px 12px; -webkit-overflow-scrolling: touch; scroll-padding: 0 16px; }
-        .cats-mobile-list::-webkit-scrollbar { display: none; }
-        .cats-mobile-list .cat-group { scroll-snap-align: start; flex: 0 0 calc(100% / 3 - 5px); min-width: calc(100% / 3 - 5px); }
-        .cats-mobile-indicators { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding-bottom: 4px; }
-        .cats-mobile-indicators span { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-300); transition: all 0.2s; }
-        .cats-mobile-indicators span.active { background: var(--primary); width: 20px; border-radius: 4px; }
-        #categoriesModal .cat-group { position: relative; border-radius: 12px; overflow: visible; margin-bottom: 0; }
-        #categoriesModal .cat-group:hover, #categoriesModal .cat-group:has(.active) { background: transparent; }
-        #categoriesModal .cat-group>.cat-item { display: flex !important; align-items: center; justify-content: space-between; width: 100%; padding: 12px 14px !important; border-radius: 12px !important; background: var(--gray-100); color: var(--dark); text-decoration: none; font-weight: 700; font-size: 14px; transition: all 0.2s ease; box-sizing: border-box; border: 1.5px solid transparent; }
+        .cats-mobile-list { display: flex; flex-direction: column; gap: 4px; }
+        #categoriesModal .cat-group { position: relative; border-radius: 12px; overflow: hidden; margin-bottom: 4px; }
+        #categoriesModal .cat-group>.cat-item { display: flex !important; align-items: center; justify-content: space-between; width: 100%; padding: 14px 16px !important; border-radius: 12px !important; background: var(--gray-100); color: var(--dark); text-decoration: none; font-weight: 700; font-size: 15px; transition: all 0.2s ease; box-sizing: border-box; border: 1.5px solid transparent; }
         #categoriesModal .cat-group>.cat-item:active { background: var(--primary-light); border-color: var(--primary-light); color: var(--primary); }
         #categoriesModal .cat-group>.cat-item.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary) !important; }
-        #categoriesModal .subcat-wrapper { position: static !important; opacity: 1 !important; visibility: visible !important; transform: none !important; box-shadow: none !important; border: none !important; background: transparent !important; width: 100% !important; padding: 6px 0 6px 12px !important; display: flex; flex-direction: column; gap: 3px; }
-        #categoriesModal .subcat-sidebar-list { gap: 3px; }
+        #categoriesModal .cat-group>.cat-item .cat-chevron { transition: transform 0.2s ease; font-size: 12px; }
+        #categoriesModal .cat-group.open>.cat-item .cat-chevron { transform: rotate(-90deg); }
+        #categoriesModal .subcat-wrapper { position: static !important; opacity: 1 !important; visibility: visible !important; transform: none !important; box-shadow: none !important; border: none !important; background: transparent !important; width: 100% !important; padding: 4px 0 4px 12px !important; display: none; flex-direction: column; gap: 2px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        #categoriesModal .cat-group.open .subcat-wrapper { display: flex; max-height: 500px; }
+        #categoriesModal .subcat-sidebar-list { gap: 2px; }
         #categoriesModal .subcat-sidebar-list .cat-item { display: flex !important; align-items: center; gap: 8px; padding: 10px 12px !important; border-radius: 10px !important; background: transparent; color: #4b5563; font-size: 13px !important; font-weight: 600; text-decoration: none; transition: all 0.2s ease; border-right: 2px solid var(--gray-200); }
         #categoriesModal .subcat-sidebar-list .cat-item:active { background: var(--primary-light); color: var(--primary); border-right-color: var(--primary); }
         .cats-brands-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }

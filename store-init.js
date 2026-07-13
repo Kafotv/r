@@ -1866,8 +1866,8 @@ window.StoreInit = {
     const catsList = modal.querySelector('.cats-mobile-list');
     if (catsList) catsList.innerHTML = normalCats;
 
-    // Setup scroll indicators for horizontal categories
-    this._setupCategoryIndicators(modal);
+    // Setup click handlers for category expand/collapse
+    this._setupCategoryToggle(modal);
 
     // Pages links
     await this._loadPages();
@@ -1879,6 +1879,27 @@ window.StoreInit = {
       });
       pagesList.innerHTML = pagesHTML;
     }
+  },
+
+  _setupCategoryToggle(modal) {
+    modal.querySelectorAll('.cat-group > .cat-item').forEach(item => {
+      item.onclick = (e) => {
+        e.preventDefault();
+        const group = item.closest('.cat-group');
+        const wrapper = group?.querySelector('.subcat-wrapper');
+        const chevron = item.querySelector('.cat-chevron');
+        if (wrapper) {
+          const isOpen = wrapper.style.display !== 'none';
+          wrapper.style.display = isOpen ? 'none' : 'flex';
+          if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+          item.classList.toggle('active', !isOpen);
+        }
+        // Still allow navigation if no subcategories
+        if (!wrapper && item.href) {
+          window.location.href = item.href;
+        }
+      };
+    });
   },
 
   _setupCategoryIndicators(modal) {
