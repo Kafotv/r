@@ -167,6 +167,7 @@
                 try {
                     const settings = await DB.getSettings();
                     window._storeSettings = settings;
+                    window.storeCurrency = settings.currency || '₪';
                     const safeParse = (v) => {
                         if (!v || typeof v !== 'string') return v;
                         try { return JSON.parse(v); } catch (e) { console.warn('Invalid JSON in settings value:', e); return null; }
@@ -7021,12 +7022,16 @@ function showNativeNotification(title, options) {
 function showOrderNotification(order) {
     if (!order) return;
     
+    const customer = order.customer || {};
+    const customerName = customer.name || customer.phone || 'عميل';
+    const customerCity = customer.city || '—';
+
     // Play selected notification sound
     playCashRegisterSound();
 
     // Show native OS/browser notification
     showNativeNotification(`💰 طلب جديد وارد بقيمة ${order.total} ₪!`, {
-        body: `الزبون: ${order.name}\nالبلد/المدينة: ${order.city}\nرقم الطلب: ${order.id}`,
+        body: `الزبون: ${customerName}\nالبلد/المدينة: ${customerCity}\nرقم الطلب: ${order.id}`,
         icon: "/favicon.ico",
         silent: false
     });
@@ -7057,7 +7062,8 @@ function showOrderNotification(order) {
         </div>
         <div>
             <div style="font-size:14px; font-weight:800; margin-bottom:2px;">تم استلام طلب جديد وارد! 💰</div>
-            <div style="font-size:12px; font-weight:600; opacity:0.9;">#${order.id} بقيمة ${order.total} ₪ للزبون ${order.name}</div>
+            <div style="font-size:12px; font-weight:600; opacity:0.9;">#${order.id} بقيمة ${order.total} ₪ للزبون ${customerName}</div>
+            <div style="font-size:11px; font-weight:500; opacity:0.8;">المدينة: ${customerCity}</div>
         </div>
     `;
 
