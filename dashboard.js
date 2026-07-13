@@ -2188,13 +2188,107 @@
             } catch (e) { console.error('Distributor Orders Error:', e); }
         }
 
+        // --- Products Pagination ---
+        let productsPage = 1;
+        let productsPerPage = 50;
+        let productsSearchTerm = '';
+
+        function getFilteredProducts() {
+            if (!productsSearchTerm) return allProducts;
+            const term = productsSearchTerm.toLowerCase();
+            return allProducts.filter(p =>
+                p.name.toLowerCase().includes(term) ||
+                (p.sku && p.sku.toLowerCase().includes(term))
+            );
+        }
+
+        function updateProductsPaginationUI() {
+            const filtered = getFilteredProducts();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / productsPerPage));
+            if (productsPage > totalPages) productsPage = totalPages;
+
+            const pagination = document.getElementById('productsPagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('productsPaginationInfo').textContent = `إجمالي ${totalItems} منتج — صفحة ${productsPage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('productsPaginationPages');
+            const firstBtn = document.getElementById('productsPaginationFirst');
+            const prevBtn = document.getElementById('productsPaginationPrev');
+            const nextBtn = document.getElementById('productsPaginationNext');
+            const lastBtn = document.getElementById('productsPaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, productsPage - range);
+            const end = Math.min(totalPages, productsPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToProductsPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToProductsPage(${p})" style="padding:6px 10px;border:1px solid ${p === productsPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === productsPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === productsPage ? '800' : '400'};color:${p === productsPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToProductsPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = productsPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = productsPage <= 1;
+            prevBtn.style.opacity = productsPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = productsPage <= 1;
+            nextBtn.style.opacity = productsPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = productsPage >= totalPages;
+            lastBtn.style.opacity = productsPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = productsPage >= totalPages;
+        }
+
+        function goToProductsPage(dest) {
+            const filtered = getFilteredProducts();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / productsPerPage));
+            if (dest === 'first') productsPage = 1;
+            else if (dest === 'prev') productsPage = Math.max(1, productsPage - 1);
+            else if (dest === 'next') productsPage = Math.min(totalPages, productsPage + 1);
+            else if (dest === 'last') productsPage = totalPages;
+            else if (typeof dest === 'number') productsPage = Math.max(1, Math.min(totalPages, dest));
+            else productsPage = 1;
+            renderProductsTable();
+        }
+
+        function changeProductsPerPage(val) {
+            productsPerPage = parseInt(val) || 50;
+            productsPage = 1;
+            renderProductsTable();
+        }
+
+        function searchProductsTable(input) {
+            productsSearchTerm = input.value;
+            productsPage = 1;
+            renderProductsTable();
+        }
+
         // --- Products Table Rendering ---
         function renderProductsTable() {
             const tbody = document.getElementById('productsTableBody') || document.querySelector('#productsTable tbody');
             if (!tbody) return;
-            
+
+            const filtered = getFilteredProducts();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / productsPerPage));
+            if (productsPage > totalPages) productsPage = totalPages;
+            const start = (productsPage - 1) * productsPerPage;
+            const end = Math.min(start + productsPerPage, totalItems);
+            const pageProducts = filtered.slice(start, end);
+
             const currency = '₪';
-            tbody.innerHTML = allProducts.map((p, index) => {
+            tbody.innerHTML = pageProducts.map((p, index) => {
                 const hasSale = p.salePrice && parseFloat(p.salePrice) > 0;
                 const price = parseFloat(p.price) || 0;
                 const salePrice = parseFloat(p.salePrice) || 0;
@@ -2258,6 +2352,7 @@
                     </tr>
                 `;
 }).join('');
+            updateProductsPaginationUI();
         }
 
         // --- Bulk Selection Functions ---

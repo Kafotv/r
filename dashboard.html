@@ -3946,7 +3946,7 @@
                         <h3 class="panel-title">قائمة المنتجات</h3>
                         <div style="display:flex; gap:12px; align-items:center;">
                             <input type="text" class="input-luxury" placeholder="بحث باسم المنتج..."
-                                onkeyup="filterTable(this, 'productsTable')" style="width:200px; padding:10px 15px;">
+                                onkeyup="searchProductsTable(this)" style="width:200px; padding:10px 15px;">
 
                             <div
                                 style="display:flex; gap:5px; background:#f1f5f9; padding:5px; border-radius:12px; border:1px solid #e2e8f0;">
@@ -4001,6 +4001,24 @@
                                 <button onclick="bulkHideProducts(false)"
                                     style="background:#10b981; color:white; border:none; padding:6px 14px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;"><i
                                         class="fas fa-eye"></i> إظهار المحدد</button>
+                            </div>
+                        </div>
+                        <div id="productsPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="productsPaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                                <select id="productsPaginationPerPage" onchange="changeProductsPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <button onclick="goToProductsPage('first')" id="productsPaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                                <button onclick="goToProductsPage('prev')" id="productsPaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                                <span id="productsPaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                                <button onclick="goToProductsPage('next')" id="productsPaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                                <button onclick="goToProductsPage('last')" id="productsPaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
                             </div>
                         </div>
                     </div>
