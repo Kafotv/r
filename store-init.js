@@ -415,10 +415,6 @@ window.StoreInit = {
             ${galleryHTML}
           </div>
           <div class="product-details">
-            <div class="breadcrumb" style="margin-bottom:15px; font-size:12px; opacity:0.6;">
-              <a href="javascript:void(0)" onclick="StoreInit._goHome()" style="color:inherit; text-decoration:none;">الرئيسية</a> / 
-              <span>${product.name}</span>
-            </div>
             <h1 class="product-title">${product.name}</h1>
             <div class="product-price-large">
               ${isComingSoon ? `
