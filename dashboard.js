@@ -10627,12 +10627,13 @@ function printOrderInvoice() {
 }
 
         // --- Monthly Report ---
-        function loadMonthlyReport() {
+        async function loadMonthlyReport() {
             const container = document.getElementById('monthlyReportContent');
             if (!container) return;
-            
+
+            container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-spinner fa-spin" style="font-size:32px;opacity:0.5;display:block;margin-bottom:15px;"></i><p style="font-weight:700;font-size:16px;">جاري تحميل التقرير...</p></div>';
+
             const monthInput = document.getElementById('reportMonth');
-            // Set default to current month if empty
             if (!monthInput.value) {
                 const now = new Date();
                 monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -10641,7 +10642,16 @@ function printOrderInvoice() {
             const monthNames = ['يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
             const monthName = monthNames[parseInt(mon) - 1] || mon;
 
-            const orders = window.storeOrdersData || [];
+            // Fetch orders if not loaded yet
+            if (!window.storeOrdersData) {
+                try {
+                    const orders = await DB.getOrders();
+                    window.storeOrdersData = orders || [];
+                } catch(e) {
+                    window.storeOrdersData = [];
+                }
+            }
+            const orders = window.storeOrdersData;
             const monthOrders = orders.filter(o => {
                 const d = new Date(o.date || o.createdAt);
                 return !isNaN(d.getTime()) && d.getFullYear() == parseInt(year) && (d.getMonth() + 1) == parseInt(mon);
