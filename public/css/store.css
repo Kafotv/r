@@ -701,6 +701,11 @@ header {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 15px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.cat-section-grid::-webkit-scrollbar {
+    display: none;
 }
 
 @media (max-width: 768px) {
