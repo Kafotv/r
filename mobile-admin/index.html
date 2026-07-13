@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f172a">
@@ -141,11 +142,11 @@
         <div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-shield-alt"></i> إعداد المدير لأول مرة</div>
         <p style="font-size:12px;line-height:1.6;margin-bottom:10px;">لم يتم العثور على بيانات المدير. أدخل رقم هاتف وكلمة مرور جديدة.</p>
         <div style="margin-bottom:10px;"><input type="tel" id="setupPhone" placeholder="رقم هاتف المدير" style="width:100%;padding:10px 12px;border:2px solid var(--gray-200);border-radius:8px;font-size:13px;"></div>
-        <div style="margin-bottom:10px;"><input type="password" id="setupPass" placeholder="كلمة المرور" style="width:100%;padding:10px 12px;border:2px solid var(--gray-200);border-radius:8px;font-size:13px;"></div>
+        <div style="margin-bottom:10px;"><form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><input type="password" id="setupPass" placeholder="كلمة المرور" style="width:100%;padding:10px 12px;border:2px solid var(--gray-200);border-radius:8px;font-size:13px;"></form></div>
         <button onclick="saveAdminSetup()" style="width:100%;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;"><i class="fas fa-save"></i> حفظ الدخول</button>
       </div>
       <div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="loginPhone" placeholder="رقم الهاتف" inputmode="numeric"></div>
-      <div class="input-group"><i class="fas fa-lock"></i><input type="password" id="loginPassword" placeholder="كلمة المرور"></div>
+      <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><div class="input-group"><i class="fas fa-lock"></i><input type="password" id="loginPassword" placeholder="كلمة المرور"></div></form>
       <button class="login-btn" onclick="handleLogin()"><i class="fas fa-sign-in-alt"></i> تسجيل الدخول</button>
       <div class="error-msg" id="loginError"></div>
       <div class="toggle-auth"><a onclick="showRegisterForm()">حساب جديد؟ سجل كموزع</a></div>
@@ -153,7 +154,7 @@
     <div id="registerForm" style="display:none">
       <div class="input-group"><i class="fas fa-user"></i><input type="text" id="regName" placeholder="الاسم الكامل *"></div>
       <div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="regPhone" placeholder="رقم الهاتف *"></div>
-      <div class="input-group"><i class="fas fa-lock"></i><input type="password" id="regPassword" placeholder="كلمة المرور *"></div>
+      <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><div class="input-group"><i class="fas fa-lock"></i><input type="password" id="regPassword" placeholder="كلمة المرور *"></div></form>
       <div class="input-group"><i class="fas fa-city"></i><input type="text" id="regCity" placeholder="المدينة *"></div>
       <div class="input-group"><i class="fas fa-map-marker-alt"></i><input type="text" id="regAddress" placeholder="العنوان *"></div>
       <button class="login-btn" onclick="handleRegister()"><i class="fas fa-user-plus"></i> تسجيل</button>

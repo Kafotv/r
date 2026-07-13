@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>المتجر</title>
     <meta name="theme-color" content="#fa0000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
     <script>
@@ -936,8 +938,10 @@
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">كلمة
                             المرور</label>
-                        <input type="password" id="distLoginPassword" dir="ltr" placeholder="********"
-                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none; margin-bottom:8px;">
+                        <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;">
+                            <input type="password" id="distLoginPassword" dir="ltr" placeholder="********"
+                                style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none; margin-bottom:8px;">
+                        </form>
                         <a href="javascript:void(0)" onclick="forgotDistPassword()"
                             style="font-size:12px; font-weight:700; color:var(--primary); text-decoration:none; display:inline-block;">هل
                             نسيت كلمة المرور؟</a>
@@ -978,8 +982,10 @@
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">كلمة المرور
                             *</label>
-                        <input type="password" id="distRegPassword" dir="ltr" placeholder="********"
-                            style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                        <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;">
+                            <input type="password" id="distRegPassword" dir="ltr" placeholder="********"
+                                style="width:100%; padding:12px 15px; border:2px solid var(--gray-200); border-radius:10px; outline:none;">
+                        </form>
                     </div>
                     <div style="margin-bottom:15px;">
                         <label style="display:block; font-size:13px; font-weight:700; margin-bottom:5px;">المدينة
