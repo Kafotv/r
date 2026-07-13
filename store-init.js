@@ -2608,6 +2608,9 @@ window.StoreInit = {
     const container = document.getElementById('publicMarketingContent');
     if (!container) return;
 
+    const skeleton = document.getElementById('homePageSkeleton');
+    if (skeleton) skeleton.remove();
+
     const sections = (this.homeSections && this.homeSections.length) ? this.homeSections : null;
     let homeWrap = document.getElementById('homeSectionsWrap');
     if (!homeWrap) {
