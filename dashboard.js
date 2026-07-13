@@ -2136,14 +2136,100 @@
         }
 
         // --- Distributor Orders ---
+        // --- Distributor Orders Pagination ---
+        let distOrdersPage = 1;
+        let distOrdersPerPage = 50;
+        let distOrdersSearchTerm = '';
+        let _distOrdersData = [];
+
+        function getFilteredDistOrders() {
+            if (!distOrdersSearchTerm) return _distOrdersData;
+            const term = distOrdersSearchTerm.toLowerCase();
+            return _distOrdersData.filter(o =>
+                (o.customer?.name && o.customer.name.toLowerCase().includes(term)) ||
+                (o.customerName && o.customerName.toLowerCase().includes(term)) ||
+                (o.customer?.phone && o.customer.phone.toLowerCase().includes(term)) ||
+                (o.customerPhone && o.customerPhone.toLowerCase().includes(term))
+            );
+        }
+
+        function updateDistOrdersPaginationUI() {
+            const filtered = getFilteredDistOrders();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / distOrdersPerPage));
+            if (distOrdersPage > totalPages) distOrdersPage = totalPages;
+
+            const pagination = document.getElementById('distOrdersPagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('distOrdersPaginationInfo').textContent = `إجمالي ${totalItems} طلب — صفحة ${distOrdersPage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('distOrdersPaginationPages');
+            const firstBtn = document.getElementById('distOrdersPaginationFirst');
+            const prevBtn = document.getElementById('distOrdersPaginationPrev');
+            const nextBtn = document.getElementById('distOrdersPaginationNext');
+            const lastBtn = document.getElementById('distOrdersPaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, distOrdersPage - range);
+            const end = Math.min(totalPages, distOrdersPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToDistOrdersPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToDistOrdersPage(${p})" style="padding:6px 10px;border:1px solid ${p === distOrdersPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === distOrdersPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === distOrdersPage ? '800' : '400'};color:${p === distOrdersPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToDistOrdersPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = distOrdersPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = distOrdersPage <= 1;
+            prevBtn.style.opacity = distOrdersPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = distOrdersPage <= 1;
+            nextBtn.style.opacity = distOrdersPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = distOrdersPage >= totalPages;
+            lastBtn.style.opacity = distOrdersPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = distOrdersPage >= totalPages;
+        }
+
+        function goToDistOrdersPage(dest) {
+            const filtered = getFilteredDistOrders();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / distOrdersPerPage));
+            if (dest === 'first') distOrdersPage = 1;
+            else if (dest === 'prev') distOrdersPage = Math.max(1, distOrdersPage - 1);
+            else if (dest === 'next') distOrdersPage = Math.min(totalPages, distOrdersPage + 1);
+            else if (dest === 'last') distOrdersPage = totalPages;
+            else if (typeof dest === 'number') distOrdersPage = Math.max(1, Math.min(totalPages, dest));
+            else distOrdersPage = 1;
+            renderDistributorOrders();
+        }
+
+        function changeDistOrdersPerPage(val) {
+            distOrdersPerPage = parseInt(val) || 50;
+            distOrdersPage = 1;
+            renderDistributorOrders();
+        }
+
+        function searchDistOrdersTable(input) {
+            distOrdersSearchTerm = input.value;
+            distOrdersPage = 1;
+            renderDistributorOrders();
+        }
+
         async function loadDistributorOrders() {
             try {
                 const orders = await DB.getOrders();
-                const tbody = document.getElementById('distOrdersTableBody');
-                
-                // جلب الموزعين المعتمدين للمقارنة بأرقام الهواتف كخيار احتياطي
                 const distributors = await DB.getDistributors();
-                window.storeDistributorsData = distributors; // Update global data
+                window.storeDistributorsData = distributors;
                 const approvedPhones = distributors.filter(d => d.status === 'approved').map(d => d.phone.replace(/\s+/g, ''));
 
                 const distOrders = orders.filter(o => {
@@ -2152,40 +2238,61 @@
                     const phoneMatch = oPhone && approvedPhones.includes(oPhone);
                     return isTagged || phoneMatch;
                 });
-                
-                if (distOrders.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px;">لا يوجد طلبات جملة حالياً</td></tr>';
-                    return;
-                }
 
-                tbody.innerHTML = distOrders.map(o => {
-                    const isWholesale = o.isWholesale === true || o.isWholesale === 'true' || o.distributorId || (approvedPhones.includes((o.customer?.phone || '').replace(/\s+/g, '')));
-                    
-                    return `
-                        <tr onclick="viewOrder('${o.id}')" style="cursor:pointer; font-size: 13px; ${isWholesale ? 'background-color: #fdfaf7;' : ''}" class="hover-row">
-                            <td style="padding: 12px 15px;">
-                                <div style="font-weight: 800; color: var(--primary);">#${o.id}</div>
-                                ${isWholesale ? '<div style="background:#fff7ed; color:#c2410c; padding:1px 5px; border-radius:4px; font-size:9px; font-weight:900; border:1px solid #fdba74; display:inline-flex; align-items:center; gap:2px; margin-top:3px;"><i class="fas fa-store"></i> جملة</div>' : ''}
-                            </td>
-                            <td>
-                                <div style="font-weight: 700; color: #1e293b;">${o.customer ? o.customer.name : (o.customerName || '—')}</div>
-                                <div style="font-size: 11px; color: #64748b;">${o.customer ? o.customer.city : ''}</div>
-                            </td>
-                            <td dir="ltr" style="font-weight: 600; color: #475569;">${o.customer ? o.customer.phone : (o.customerPhone || '—')}</td>
-                            <td style="color: var(--primary); font-weight: 900; font-size: 14px;">${parseFloat(o.total).toFixed(2)} ₪</td>
-                            <td>
-                                <span class="badge" style="background: ${o.status === 'مكتمل' ? '#f0fdf4' : '#fffbeb'}; color: ${o.status === 'مكتمل' ? '#166534' : '#92400e'}; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid ${o.status === 'مكتمل' ? '#bbf7d0' : '#fef3c7'};">
-                                    ${o.status}
-                                </span>
-                            </td>
-                            <td style="font-size: 11px; opacity: 0.7;">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
-                            <td onclick="event.stopPropagation()">
-                                <button class="btn btn-outline" style="padding: 5px 12px; font-size: 11px; border-radius: 8px;" onclick="viewOrder('${o.id}')">التفاصيل</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
+                _distOrdersData = distOrders;
+                _distOrdersApprovedPhones = approvedPhones;
+                distOrdersPage = 1;
+                renderDistributorOrders();
             } catch (e) { console.error('Distributor Orders Error:', e); }
+        }
+        let _distOrdersApprovedPhones = [];
+
+        function renderDistributorOrders() {
+            const tbody = document.getElementById('distOrdersTableBody');
+            if (!tbody) return;
+
+            const filtered = getFilteredDistOrders();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / distOrdersPerPage));
+            if (distOrdersPage > totalPages) distOrdersPage = totalPages;
+            const start = (distOrdersPage - 1) * distOrdersPerPage;
+            const end = Math.min(start + distOrdersPerPage, totalItems);
+            const pageOrders = filtered.slice(start, end);
+
+            if (pageOrders.length === 0 && totalItems === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px;">لا يوجد طلبات جملة حالياً</td></tr>';
+                updateDistOrdersPaginationUI();
+                return;
+            }
+
+            tbody.innerHTML = pageOrders.map(o => {
+                const isWholesale = o.isWholesale === true || o.isWholesale === 'true' || o.distributorId || (_distOrdersApprovedPhones || []).includes((o.customer?.phone || '').replace(/\s+/g, ''));
+                
+                return `
+                    <tr onclick="viewOrder('${o.id}')" style="cursor:pointer; font-size: 13px; ${isWholesale ? 'background-color: #fdfaf7;' : ''}" class="hover-row">
+                        <td style="padding: 12px 15px;">
+                            <div style="font-weight: 800; color: var(--primary);">#${o.id}</div>
+                            ${isWholesale ? '<div style="background:#fff7ed; color:#c2410c; padding:1px 5px; border-radius:4px; font-size:9px; font-weight:900; border:1px solid #fdba74; display:inline-flex; align-items:center; gap:2px; margin-top:3px;"><i class="fas fa-store"></i> جملة</div>' : ''}
+                        </td>
+                        <td>
+                            <div style="font-weight: 700; color: #1e293b;">${o.customer ? o.customer.name : (o.customerName || '—')}</div>
+                            <div style="font-size: 11px; color: #64748b;">${o.customer ? o.customer.city : ''}</div>
+                        </td>
+                        <td dir="ltr" style="font-weight: 600; color: #475569;">${o.customer ? o.customer.phone : (o.customerPhone || '—')}</td>
+                        <td style="color: var(--primary); font-weight: 900; font-size: 14px;">${parseFloat(o.total).toFixed(2)} ₪</td>
+                        <td>
+                            <span class="badge" style="background: ${o.status === 'مكتمل' ? '#f0fdf4' : '#fffbeb'}; color: ${o.status === 'مكتمل' ? '#166534' : '#92400e'}; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid ${o.status === 'مكتمل' ? '#bbf7d0' : '#fef3c7'};">
+                                ${o.status}
+                            </span>
+                        </td>
+                        <td style="font-size: 11px; opacity: 0.7;">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
+                        <td onclick="event.stopPropagation()">
+                            <button class="btn btn-outline" style="padding: 5px 12px; font-size: 11px; border-radius: 8px;" onclick="viewOrder('${o.id}')">التفاصيل</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            updateDistOrdersPaginationUI();
         }
 
         // --- Products Pagination ---
@@ -2573,11 +2680,111 @@
             ordersPage = 1;
             renderOrdersTable();
         }
+
+        // --- Wholesale Prices Pagination ---
+        let wholesalePage = 1;
+        let wholesalePerPage = 50;
+        let wholesaleSearchTerm = '';
+
+        function getFilteredWholesale() {
+            if (!wholesaleSearchTerm) return allProducts;
+            const term = wholesaleSearchTerm.toLowerCase();
+            return allProducts.filter(p =>
+                p.name.toLowerCase().includes(term) ||
+                (p.sku && p.sku.toLowerCase().includes(term))
+            );
+        }
+
+        function updateWholesalePaginationUI() {
+            const filtered = getFilteredWholesale();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / wholesalePerPage));
+            if (wholesalePage > totalPages) wholesalePage = totalPages;
+
+            const pagination = document.getElementById('wholesalePagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('wholesalePaginationInfo').textContent = `إجمالي ${totalItems} منتج — صفحة ${wholesalePage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('wholesalePaginationPages');
+            const firstBtn = document.getElementById('wholesalePaginationFirst');
+            const prevBtn = document.getElementById('wholesalePaginationPrev');
+            const nextBtn = document.getElementById('wholesalePaginationNext');
+            const lastBtn = document.getElementById('wholesalePaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, wholesalePage - range);
+            const end = Math.min(totalPages, wholesalePage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToWholesalePage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToWholesalePage(${p})" style="padding:6px 10px;border:1px solid ${p === wholesalePage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === wholesalePage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === wholesalePage ? '800' : '400'};color:${p === wholesalePage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToWholesalePage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = wholesalePage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = wholesalePage <= 1;
+            prevBtn.style.opacity = wholesalePage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = wholesalePage <= 1;
+            nextBtn.style.opacity = wholesalePage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = wholesalePage >= totalPages;
+            lastBtn.style.opacity = wholesalePage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = wholesalePage >= totalPages;
+        }
+
+        function goToWholesalePage(dest) {
+            const filtered = getFilteredWholesale();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / wholesalePerPage));
+            if (dest === 'first') wholesalePage = 1;
+            else if (dest === 'prev') wholesalePage = Math.max(1, wholesalePage - 1);
+            else if (dest === 'next') wholesalePage = Math.min(totalPages, wholesalePage + 1);
+            else if (dest === 'last') wholesalePage = totalPages;
+            else if (typeof dest === 'number') wholesalePage = Math.max(1, Math.min(totalPages, dest));
+            else wholesalePage = 1;
+            renderWholesalePricesTable();
+        }
+
+        function changeWholesalePerPage(val) {
+            wholesalePerPage = parseInt(val) || 50;
+            wholesalePage = 1;
+            renderWholesalePricesTable();
+        }
+
+        function searchWholesaleTable(input) {
+            wholesaleSearchTerm = input.value;
+            wholesalePage = 1;
+            renderWholesalePricesTable();
+        }
+
         function loadWholesalePricesUI() {
+            wholesalePage = 1;
+            renderWholesalePricesTable();
+        }
+
+        function renderWholesalePricesTable() {
             const tbody = document.getElementById('wholesalePricesBody');
             if (!tbody) return;
 
-            tbody.innerHTML = allProducts.map(p => {
+            const filtered = getFilteredWholesale();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / wholesalePerPage));
+            if (wholesalePage > totalPages) wholesalePage = totalPages;
+            const start = (wholesalePage - 1) * wholesalePerPage;
+            const end = Math.min(start + wholesalePerPage, totalItems);
+            const pageProducts = filtered.slice(start, end);
+
+            tbody.innerHTML = pageProducts.map(p => {
                 const retail = parseFloat(p.price) || 0;
                 const wholesale = parseFloat(p.wholesalePrice) || 0;
                 const profit = retail - wholesale;
@@ -2601,6 +2808,7 @@
                     </tr>
                 `;
             }).join('');
+            updateWholesalePaginationUI();
         }
 
         function updateWholesaleProfitUI(input, retail) {
@@ -2613,16 +2821,22 @@
 
         async function saveAllWholesalePrices() {
             const rows = document.querySelectorAll('#wholesalePricesBody tr');
-            const updates = Array.from(rows).map(row => ({
-                id: row.dataset.id,
-                wholesalePrice: row.querySelector('.wholesale-input').value
+            const inputMap = {};
+            rows.forEach(row => {
+                const id = row.dataset.id;
+                const val = row.querySelector('.wholesale-input')?.value;
+                if (id && val !== undefined) inputMap[id] = val;
+            });
+
+            const updates = allProducts.map(p => ({
+                id: p.id,
+                wholesalePrice: inputMap[p.id] !== undefined ? inputMap[p.id] : (p.wholesalePrice || 0)
             }));
 
             try {
                 const result = await DB.bulkUpdateWholesale(updates);
                 if (result) {
                     showToast('✅ تم تحديث أسعار الجملة بنجاح');
-                    // Refresh data
                     allProducts = await DB.getProducts();
                 }
             } catch (e) { showToast('❌ حدث خطأ أثناء الحفظ'); }
@@ -2743,56 +2957,147 @@
              document.getElementById('promoProductsModal').style.display = 'none';
         };
 
+        // --- Coupons Pagination ---
+        let couponsPage = 1;
+        let couponsPerPage = 50;
+        let _couponsData = [];
+
+        function getFilteredCoupons() {
+            return _couponsData; // No search for now, simple pagination
+        }
+
+        function updateCouponsPaginationUI() {
+            const filtered = getFilteredCoupons();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / couponsPerPage));
+            if (couponsPage > totalPages) couponsPage = totalPages;
+
+            const pagination = document.getElementById('couponsPagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('couponsPaginationInfo').textContent = `إجمالي ${totalItems} كوبون — صفحة ${couponsPage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('couponsPaginationPages');
+            const firstBtn = document.getElementById('couponsPaginationFirst');
+            const prevBtn = document.getElementById('couponsPaginationPrev');
+            const nextBtn = document.getElementById('couponsPaginationNext');
+            const lastBtn = document.getElementById('couponsPaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, couponsPage - range);
+            const end = Math.min(totalPages, couponsPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToCouponsPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToCouponsPage(${p})" style="padding:6px 10px;border:1px solid ${p === couponsPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === couponsPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === couponsPage ? '800' : '400'};color:${p === couponsPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToCouponsPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = couponsPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = couponsPage <= 1;
+            prevBtn.style.opacity = couponsPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = couponsPage <= 1;
+            nextBtn.style.opacity = couponsPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = couponsPage >= totalPages;
+            lastBtn.style.opacity = couponsPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = couponsPage >= totalPages;
+        }
+
+        function goToCouponsPage(dest) {
+            const filtered = getFilteredCoupons();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / couponsPerPage));
+            if (dest === 'first') couponsPage = 1;
+            else if (dest === 'prev') couponsPage = Math.max(1, couponsPage - 1);
+            else if (dest === 'next') couponsPage = Math.min(totalPages, couponsPage + 1);
+            else if (dest === 'last') couponsPage = totalPages;
+            else if (typeof dest === 'number') couponsPage = Math.max(1, Math.min(totalPages, dest));
+            else couponsPage = 1;
+            renderCouponsTable();
+        }
+
+        function changeCouponsPerPage(val) {
+            couponsPerPage = parseInt(val) || 50;
+            couponsPage = 1;
+            renderCouponsTable();
+        }
+
         async function loadCoupons() {
             try {
                 const coupons = await DB.getCoupons();
-                const tbody = document.getElementById('couponsBody');
-                if(!tbody) return;
-                
-                if(coupons.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">
-                                <i class="fas fa-ticket-alt" style="font-size:30px; margin-bottom:10px; opacity:0.5;"></i>
-                                <p>لا يوجد كوبونات خصم حالياً. قم بإنشاء أول كوبون!</p>
-                            </td>
-                        </tr>
-                    `;
-                    return;
-                }
+                _couponsData = coupons;
+                couponsPage = 1;
+                renderCouponsTable();
+            } catch (e) { console.error('Coupons Load Error:', e); }
+        }
 
-                tbody.innerHTML = coupons.map(c => {
-                    const isRestricted = (c.targetPhone || (c.productIds && c.productIds.length > 0));
-                    const isExhausted = c.maxUses > 0 && (c.usedCount || 0) >= c.maxUses;
-                    const rowBg = isExhausted ? 'style="background:#fef2f2;opacity:0.7;"' : '';
-                    return `
-                    <tr ${rowBg}>
-                        <td>
-                            <strong>${c.code}</strong>
-                            ${isExhausted ? '<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;margin-right:5px;">مستنفد</span>' : ''}
-                            ${isRestricted ? '<i class="fas fa-lock" style="font-size:10px; color:#f59e0b; margin-right:5px;" title="مقيد برقم هاتف أو منتجات"></i>' : ''}
-                        </td>
-                        <td>${c.type === 'percentage' ? 'نسبة مئوية (%)' : 'مبلغ ثابت (₪)'}</td>
-                        <td>${c.value} ${c.type === 'percentage' ? '%' : '₪'}</td>
-                        <td>${c.minOrder || 0} ₪</td>
-                        <td>${new Date(c.createdAt).toLocaleDateString('ar')}</td>
-                        <td>
-                            ${isExhausted
-                              ? '<span style="color:#ef4444;font-weight:800;font-size:18px;">×</span>'
-                              : `<span style="font-weight:bold;">${c.usedCount || 0}</span>`
-                            }
-                            <span style="color:#94a3b8; font-size:11px;"> / ${c.maxUses && c.maxUses > 0 ? c.maxUses : '∞'}</span>
-                            ${isExhausted ? '<br><span style="color:#ef4444;font-size:10px;font-weight:700;">هذا الكوبون استُنفد بالفعل</span>' : ''}
-                        </td>
-                        <td>
-                            <div style="display:flex; gap:5px;">
-                                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; color: var(--primary); border-color: #e0e7ff; background: #e0e7ff;" onclick="editCoupon('${c.code}')"><i class="fas fa-edit"></i> تعديل</button>
-                                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; color: red; border-color: #fee2e2; background: #fee2e2;" onclick="deleteCoupon('${c.code}')"><i class="fas fa-trash"></i> حذف</button>
-                            </div>
+        function renderCouponsTable() {
+            const tbody = document.getElementById('couponsBody');
+            if(!tbody) return;
+
+            const filtered = getFilteredCoupons();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / couponsPerPage));
+            if (couponsPage > totalPages) couponsPage = totalPages;
+            const start = (couponsPage - 1) * couponsPerPage;
+            const end = Math.min(start + couponsPerPage, totalItems);
+            const pageCoupons = filtered.slice(start, end);
+
+            if(pageCoupons.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">
+                            <i class="fas fa-ticket-alt" style="font-size:30px; margin-bottom:10px; opacity:0.5;"></i>
+                            <p>لا يوجد كوبونات خصم حالياً. قم بإنشاء أول كوبون!</p>
                         </td>
                     </tr>
-                `}).join('');
-            } catch (e) { console.error('Coupons Load Error:', e); }
+                `;
+                updateCouponsPaginationUI();
+                return;
+            }
+
+            tbody.innerHTML = pageCoupons.map(c => {
+                const isRestricted = (c.targetPhone || (c.productIds && c.productIds.length > 0));
+                const isExhausted = c.maxUses > 0 && (c.usedCount || 0) >= c.maxUses;
+                const rowBg = isExhausted ? 'style="background:#fef2f2;opacity:0.7;"' : '';
+                return `
+                <tr ${rowBg}>
+                    <td>
+                        <strong>${c.code}</strong>
+                        ${isExhausted ? '<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;margin-right:5px;">مستنفد</span>' : ''}
+                        ${isRestricted ? '<i class="fas fa-lock" style="font-size:10px; color:#f59e0b; margin-right:5px;" title="مقيد برقم هاتف أو منتجات"></i>' : ''}
+                    </td>
+                    <td>${c.type === 'percentage' ? 'نسبة مئوية (%)' : 'مبلغ ثابت (₪)'}</td>
+                    <td>${c.value} ${c.type === 'percentage' ? '%' : '₪'}</td>
+                    <td>${c.minOrder || 0} ₪</td>
+                    <td>${new Date(c.createdAt).toLocaleDateString('ar')}</td>
+                    <td>
+                        ${isExhausted
+                          ? '<span style="color:#ef4444;font-weight:800;font-size:18px;">×</span>'
+                          : `<span style="font-weight:bold;">${c.usedCount || 0}</span>`
+                        }
+                        <span style="color:#94a3b8; font-size:11px;"> / ${c.maxUses && c.maxUses > 0 ? c.maxUses : '∞'}</span>
+                        ${isExhausted ? '<br><span style="color:#ef4444;font-size:10px;font-weight:700;">هذا الكوبون استُنفد بالفعل</span>' : ''}
+                    </td>
+                    <td>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; color: var(--primary); border-color: #e0e7ff; background: #e0e7ff;" onclick="editCoupon('${c.code}')"><i class="fas fa-edit"></i> تعديل</button>
+                            <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; color: red; border-color: #fee2e2; background: #fee2e2;" onclick="deleteCoupon('${c.code}')"><i class="fas fa-trash"></i> حذف</button>
+                        </div>
+                    </td>
+                </tr>
+            `}).join('');
+            updateCouponsPaginationUI();
         }
 
         window.openCreateCouponModal = openCreateCouponModal;
@@ -5521,49 +5826,157 @@
             rows.forEach(r => tbody.appendChild(r));
         }
 
+        // --- Abandoned Carts Pagination ---
+        let abandonedPage = 1;
+        let abandonedPerPage = 50;
+        let abandonedSearchTerm = '';
+
+        function getFilteredAbandoned() {
+            if (!abandonedSearchTerm) return window._abandonedData || [];
+            const term = abandonedSearchTerm.toLowerCase();
+            return (window._abandonedData || []).filter(c =>
+                (c.name && c.name.toLowerCase().includes(term)) ||
+                (c.phone && c.phone.toLowerCase().includes(term)) ||
+                (c.email && c.email.toLowerCase().includes(term))
+            );
+        }
+
+        function updateAbandonedPaginationUI() {
+            const filtered = getFilteredAbandoned();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / abandonedPerPage));
+            if (abandonedPage > totalPages) abandonedPage = totalPages;
+
+            const pagination = document.getElementById('abandonedPagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('abandonedPaginationInfo').textContent = `إجمالي ${totalItems} طلب — صفحة ${abandonedPage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('abandonedPaginationPages');
+            const firstBtn = document.getElementById('abandonedPaginationFirst');
+            const prevBtn = document.getElementById('abandonedPaginationPrev');
+            const nextBtn = document.getElementById('abandonedPaginationNext');
+            const lastBtn = document.getElementById('abandonedPaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, abandonedPage - range);
+            const end = Math.min(totalPages, abandonedPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToAbandonedPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToAbandonedPage(${p})" style="padding:6px 10px;border:1px solid ${p === abandonedPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === abandonedPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === abandonedPage ? '800' : '400'};color:${p === abandonedPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToAbandonedPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = abandonedPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = abandonedPage <= 1;
+            prevBtn.style.opacity = abandonedPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = abandonedPage <= 1;
+            nextBtn.style.opacity = abandonedPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = abandonedPage >= totalPages;
+            lastBtn.style.opacity = abandonedPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = abandonedPage >= totalPages;
+        }
+
+        function goToAbandonedPage(dest) {
+            const filtered = getFilteredAbandoned();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / abandonedPerPage));
+            if (dest === 'first') abandonedPage = 1;
+            else if (dest === 'prev') abandonedPage = Math.max(1, abandonedPage - 1);
+            else if (dest === 'next') abandonedPage = Math.min(totalPages, abandonedPage + 1);
+            else if (dest === 'last') abandonedPage = totalPages;
+            else if (typeof dest === 'number') abandonedPage = Math.max(1, Math.min(totalPages, dest));
+            else abandonedPage = 1;
+            renderAbandonedTable();
+        }
+
+        function changeAbandonedPerPage(val) {
+            abandonedPerPage = parseInt(val) || 50;
+            abandonedPage = 1;
+            renderAbandonedTable();
+        }
+
+        function searchAbandonedTable(input) {
+            abandonedSearchTerm = input.value;
+            abandonedPage = 1;
+            renderAbandonedTable();
+        }
+
+        function renderAbandonedTable() {
+            const tbody = document.getElementById('abandonedTableBody');
+            if (!tbody) return;
+
+            const filtered = getFilteredAbandoned();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / abandonedPerPage));
+            if (abandonedPage > totalPages) abandonedPage = totalPages;
+            const start = (abandonedPage - 1) * abandonedPerPage;
+            const end = Math.min(start + abandonedPerPage, totalItems);
+            const pageData = filtered.slice(start, end);
+
+            if (!totalItems) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#9ca3af;">
+                    <i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px;color:#10b981;opacity:0.5;"></i>
+                    لا توجد طلبات مفقودة حالياً
+                </td></tr>`;
+                updateAbandonedPaginationUI();
+                return;
+            }
+
+            const cur = window.storeCurrency || '$';
+            tbody.innerHTML = pageData.map(c => {
+                const total = (c.items||[]).reduce((s,i)=>s+(parseFloat(i.price||0)*parseInt(i.quantity||1)),0);
+                const date = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+                const items = (c.items||[]).map(i=>`<span style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:11px;margin:2px;display:inline-block;">${i.name||''}</span>`).join('');
+
+                const productDetails = (c.items || []).map(i => `- ${i.name} (الكمية: ${i.quantity})`).join('\n');
+                const waMessage = `مرحباً ${c.name}، لاحظنا أنك لم تكمل طلبك في متجرنا. هل تحتاج مساعدة؟\n\nالمنتجات في سلتك:\n${productDetails}\n\nالإجمالي: ${total.toFixed(2)} ${cur}`;
+
+                return `<tr onclick='viewAbandonedDetails(${JSON.stringify(c).replace(/'/g, "&apos;")})' style="cursor:pointer;" class="hover-row">
+                    <td>
+                        <div style="font-weight:700;color:#111827;font-size:13px;">${c.name||'—'}</div>
+                        <div style="font-size:11px;color:#6b7280;">${c.email||''}</div>
+                    </td>
+                    <td dir="ltr" style="font-weight:600;font-size:13px;">${c.phone||'—'}</td>
+                    <td style="max-width:200px;">${items||'—'}</td>
+                    <td style="font-weight:800;color:var(--primary);font-size:14px;">${total.toFixed(2)} ${cur}</td>
+                    <td style="font-size:12px;color:#6b7280;">${date}</td>
+                    <td>
+                        <div style="display:flex; gap:5px;">
+                            <a href="https://wa.me/${(c.phone||'').replace(/\D/g,'')}?text=${encodeURIComponent(waMessage)}" target="_blank" onclick="event.stopPropagation()"
+                               style="padding:6px 12px;font-size:12px;border-radius:8px;background:#dcfce7;color:#15803d;border:1.5px solid #bbf7d0;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:5px;text-decoration:none;">
+                               <i class="fab fa-whatsapp"></i> متابعة
+                            </a>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+            updateAbandonedPaginationUI();
+        }
+
 // --- Abandoned Carts ---
         async function loadAbandonedCarts() {
             const tbody = document.getElementById('abandonedTableBody');
             if(!tbody) return;
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:#9ca3af;"><i class="fas fa-spinner fa-spin" style="font-size:20px;"></i></td></tr>`;
             try {
-                const data = await DB.getAbandoned();
-                const cur = window.storeCurrency || '$';
-                if(!data.length) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#9ca3af;">
-                        <i class="fas fa-check-circle" style="font-size:32px;display:block;margin-bottom:10px;color:#10b981;opacity:0.5;"></i>
-                        لا توجد طلبات مفقودة حالياً
-                    </td></tr>`;
-                    return;
-                }
-                tbody.innerHTML = data.map(c => {
-                    const total = (c.items||[]).reduce((s,i)=>s+(parseFloat(i.price||0)*parseInt(i.quantity||1)),0);
-                    const date = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-                    const items = (c.items||[]).map(i=>`<span style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:11px;margin:2px;display:inline-block;">${i.name||''}</span>`).join('');
-                    
-                    // Construct WhatsApp message with products
-                    const productDetails = (c.items || []).map(i => `- ${i.name} (الكمية: ${i.quantity})`).join('\n');
-                    const waMessage = `مرحباً ${c.name}، لاحظنا أنك لم تكمل طلبك في متجرنا. هل تحتاج مساعدة؟\n\nالمنتجات في سلتك:\n${productDetails}\n\nالإجمالي: ${total.toFixed(2)} ${cur}`;
-
-                    return `<tr onclick='viewAbandonedDetails(${JSON.stringify(c).replace(/'/g, "&apos;")})' style="cursor:pointer;" class="hover-row">
-                        <td>
-                            <div style="font-weight:700;color:#111827;font-size:13px;">${c.name||'—'}</div>
-                            <div style="font-size:11px;color:#6b7280;">${c.email||''}</div>
-                        </td>
-                        <td dir="ltr" style="font-weight:600;font-size:13px;">${c.phone||'—'}</td>
-                        <td style="max-width:200px;">${items||'—'}</td>
-                        <td style="font-weight:800;color:var(--primary);font-size:14px;">${total.toFixed(2)} ${cur}</td>
-                        <td style="font-size:12px;color:#6b7280;">${date}</td>
-                        <td>
-                            <div style="display:flex; gap:5px;">
-                                <a href="https://wa.me/${(c.phone||'').replace(/\D/g,'')}?text=${encodeURIComponent(waMessage)}" target="_blank" onclick="event.stopPropagation()"
-                                   style="padding:6px 12px;font-size:12px;border-radius:8px;background:#dcfce7;color:#15803d;border:1.5px solid #bbf7d0;cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:5px;text-decoration:none;">
-                                   <i class="fab fa-whatsapp"></i> متابعة
-                                </a>
-                            </div>
-                        </td>
-                    </tr>`;
-                }).join('');
+                window._abandonedData = await DB.getAbandoned();
+                abandonedPage = 1;
+                abandonedSearchTerm = '';
+                const searchInput = document.querySelector('#tab-abandoned .input-luxury');
+                if (searchInput) searchInput.value = '';
+                renderAbandonedTable();
             } catch(e) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:#ef4444;">فشل تحميل البيانات</td></tr>`;
             }
@@ -5665,12 +6078,106 @@
             closeConfirmModal();
         });
 
+        // --- Distributors Pagination ---
+        let distributorsPage = 1;
+        let distributorsPerPage = 50;
+        let _distributorsData = [];
+
+        function getFilteredDistributors() {
+            return _distributorsData; // No search for now
+        }
+
+        function updateDistributorsPaginationUI() {
+            const filtered = getFilteredDistributors();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / distributorsPerPage));
+            if (distributorsPage > totalPages) distributorsPage = totalPages;
+
+            const pagination = document.getElementById('distributorsPagination');
+            if (!pagination) return;
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            document.getElementById('distributorsPaginationInfo').textContent = `إجمالي ${totalItems} موزع — صفحة ${distributorsPage} من ${totalPages}`;
+
+            const pageNav = document.getElementById('distributorsPaginationPages');
+            const firstBtn = document.getElementById('distributorsPaginationFirst');
+            const prevBtn = document.getElementById('distributorsPaginationPrev');
+            const nextBtn = document.getElementById('distributorsPaginationNext');
+            const lastBtn = document.getElementById('distributorsPaginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
+            let pagesHTML = '';
+            const range = 2;
+            const start = Math.max(1, distributorsPage - range);
+            const end = Math.min(totalPages, distributorsPage + range);
+            if (start > 1) {
+                pagesHTML += `<button onclick="goToDistributorsPage(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">1</button>`;
+                if (start > 2) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+            }
+            for (let p = start; p <= end; p++) {
+                pagesHTML += `<button onclick="goToDistributorsPage(${p})" style="padding:6px 10px;border:1px solid ${p === distributorsPage ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${p === distributorsPage ? 'var(--primary)' : 'white'};cursor:pointer;font-size:12px;font-weight:${p === distributorsPage ? '800' : '400'};color:${p === distributorsPage ? 'white' : 'var(--gray-600)'};">${p}</button>`;
+            }
+            if (end < totalPages) {
+                if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
+                pagesHTML += `<button onclick="goToDistributorsPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
+            }
+            pageNav.innerHTML = pagesHTML;
+
+            firstBtn.style.opacity = distributorsPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = distributorsPage <= 1;
+            prevBtn.style.opacity = distributorsPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = distributorsPage <= 1;
+            nextBtn.style.opacity = distributorsPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = distributorsPage >= totalPages;
+            lastBtn.style.opacity = distributorsPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = distributorsPage >= totalPages;
+        }
+
+        function goToDistributorsPage(dest) {
+            const filtered = getFilteredDistributors();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / distributorsPerPage));
+            if (dest === 'first') distributorsPage = 1;
+            else if (dest === 'prev') distributorsPage = Math.max(1, distributorsPage - 1);
+            else if (dest === 'next') distributorsPage = Math.min(totalPages, distributorsPage + 1);
+            else if (dest === 'last') distributorsPage = totalPages;
+            else if (typeof dest === 'number') distributorsPage = Math.max(1, Math.min(totalPages, dest));
+            else distributorsPage = 1;
+            renderDistributorsTable();
+        }
+
+        function changeDistributorsPerPage(val) {
+            distributorsPerPage = parseInt(val) || 50;
+            distributorsPage = 1;
+            renderDistributorsTable();
+        }
+
         // Distributors Management
         async function loadDistributors() {
-            const data = await DB.getDistributors();
+            try {
+                const data = await DB.getDistributors();
+                _distributorsData = data;
+                distributorsPage = 1;
+                // Close any open details rows
+                document.querySelectorAll('[id^="details-"]').forEach(row => row.style.display = 'none');
+                renderDistributorsTable();
+            } catch (e) { console.error('Distributors Load Error:', e); }
+        }
+
+        function renderDistributorsTable() {
             const tbody = document.getElementById('distributorsBody');
             if(!tbody) return;
-            tbody.innerHTML = data.map(d => `
+
+            const filtered = getFilteredDistributors();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / distributorsPerPage));
+            if (distributorsPage > totalPages) distributorsPage = totalPages;
+            const start = (distributorsPage - 1) * distributorsPerPage;
+            const end = Math.min(start + distributorsPerPage, totalItems);
+            const pageData = filtered.slice(start, end);
+
+            tbody.innerHTML = pageData.map(d => `
                 <tr style="transition: background 0.2s;">
                     <td>
                         <span onclick="toggleDistributorProducts('${d.id}', '${d.phone}', this)" style="cursor:pointer; color:var(--primary); border-bottom:1.5px dashed var(--primary); display:inline-block; font-weight:800; padding:2px 0;" title="اضغط لعرض المنتجات التي اشتراها التاجر">
@@ -5707,6 +6214,7 @@
                     </td>
                 </tr>
             `).join('');
+            updateDistributorsPaginationUI();
         }
 
         async function toggleDistributorProducts(id, phone, nameEl) {

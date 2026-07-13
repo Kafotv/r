@@ -2641,7 +2641,7 @@
                         </div>
                         <div style="display:flex;gap:10px;">
                             <input type="text" class="input-luxury" placeholder="بحث..."
-                                onkeyup="filterTable(this,'abandonedTable')"
+                                onkeyup="searchAbandonedTable(this)"
                                 style="width:200px;padding:8px 14px;font-size:13px;">
                             <button class="btn btn-outline" onclick="loadAbandonedCarts()"
                                 style="font-size:13px;padding:8px 15px;"><i class="fas fa-sync"></i> تحديث</button>
@@ -2669,6 +2669,24 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div id="abandonedPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span id="abandonedPaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                            <select id="abandonedPaginationPerPage" onchange="changeAbandonedPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <button onclick="goToAbandonedPage('first')" id="abandonedPaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                            <button onclick="goToAbandonedPage('prev')" id="abandonedPaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                            <span id="abandonedPaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                            <button onclick="goToAbandonedPage('next')" id="abandonedPaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                            <button onclick="goToAbandonedPage('last')" id="abandonedPaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2725,7 +2743,24 @@
                                 <!-- سيتم جلبهم بالـ JS -->
                             </tbody>
                         </table>
-                    </div>
+                        <div id="distributorsPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="distributorsPaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                                <select id="distributorsPaginationPerPage" onchange="changeDistributorsPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <button onclick="goToDistributorsPage('first')" id="distributorsPaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                                <button onclick="goToDistributorsPage('prev')" id="distributorsPaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                                <span id="distributorsPaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                                <button onclick="goToDistributorsPage('next')" id="distributorsPaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                                <button onclick="goToDistributorsPage('last')" id="distributorsPaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                            </div>
+                        </div>
                 </div>
             </div>
 
@@ -2764,7 +2799,7 @@
                         <h3 class="panel-title">طلبات الموزعين المعتمدين</h3>
                         <div style="display:flex; gap:10px;">
                             <input type="text" class="input-luxury" id="distOrdersSearch"
-                                placeholder="بحث باسم الموزع..." onkeyup="filterTable(this, 'distOrdersTable')"
+                                placeholder="بحث باسم الموزع..." onkeyup="searchDistOrdersTable(this)"
                                 style="width:200px; padding:8px 12px; font-size:13px;">
                             <button class="btn btn-outline" onclick="loadDistributorOrders()"><i
                                     class="fas fa-sync"></i></button>
@@ -2787,6 +2822,24 @@
                                 <!-- Populated via JS -->
                             </tbody>
                         </table>
+                        <div id="distOrdersPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="distOrdersPaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                                <select id="distOrdersPaginationPerPage" onchange="changeDistOrdersPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <button onclick="goToDistOrdersPage('first')" id="distOrdersPaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                                <button onclick="goToDistOrdersPage('prev')" id="distOrdersPaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                                <span id="distOrdersPaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                                <button onclick="goToDistOrdersPage('next')" id="distOrdersPaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                                <button onclick="goToDistOrdersPage('last')" id="distOrdersPaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2818,6 +2871,24 @@
                                 <!-- Populated via JS -->
                             </tbody>
                         </table>
+                        <div id="wholesalePagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="wholesalePaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                                <select id="wholesalePaginationPerPage" onchange="changeWholesalePerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <button onclick="goToWholesalePage('first')" id="wholesalePaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                                <button onclick="goToWholesalePage('prev')" id="wholesalePaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                                <span id="wholesalePaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                                <button onclick="goToWholesalePage('next')" id="wholesalePaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                                <button onclick="goToWholesalePage('last')" id="wholesalePaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2847,6 +2918,24 @@
                                 <!-- سيتم جلبهم بالـ JS -->
                             </tbody>
                         </table>
+                        <div id="couponsPagination" style="display:none; justify-content:space-between; align-items:center; padding:15px 20px; border-top:1px solid var(--border); font-size:13px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="couponsPaginationInfo" style="color:var(--gray-600); font-weight:600;"></span>
+                                <select id="couponsPaginationPerPage" onchange="changeCouponsPerPage(this.value)" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-family:inherit; outline:none;">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span style="color:var(--gray-400); font-size:12px;">لكل صفحة</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <button onclick="goToCouponsPage('first')" id="couponsPaginationFirst" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأولى"><i class="fas fa-angle-double-right"></i></button>
+                                <button onclick="goToCouponsPage('prev')" id="couponsPaginationPrev" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="السابقة"><i class="fas fa-chevron-right"></i></button>
+                                <span id="couponsPaginationPages" style="display:flex; align-items:center; gap:3px;"></span>
+                                <button onclick="goToCouponsPage('next')" id="couponsPaginationNext" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="التالية"><i class="fas fa-chevron-left"></i></button>
+                                <button onclick="goToCouponsPage('last')" id="couponsPaginationLast" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:white; cursor:pointer; font-size:12px; color:var(--gray-600);" title="الأخيرة"><i class="fas fa-angle-double-left"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
