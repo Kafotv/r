@@ -1996,8 +1996,10 @@ window.StoreInit = {
       if (!indicators) return;
       const items = grid.querySelectorAll('a');
       const totalItems = items.length;
-      if (totalItems <= 3) { indicators.innerHTML = ''; return; }
-      const pages = Math.ceil(totalItems / 3);
+      const isMobile = window.innerWidth <= 768;
+      const itemsPerPage = isMobile ? 3 : 6;
+      if (totalItems <= itemsPerPage) { indicators.innerHTML = ''; return; }
+      const pages = Math.ceil(totalItems / itemsPerPage);
       indicators.innerHTML = Array.from({ length: pages }, (_, i) => 
         `<span${i === 0 ? ' class="active"' : ''} style="cursor:pointer;" data-page="${i}"></span>`
       ).join('');
