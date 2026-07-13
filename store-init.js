@@ -1910,6 +1910,31 @@ window.StoreInit = {
     updateIndicators();
   },
 
+  _setupCatSectionIndicators() {
+    const grids = document.querySelectorAll('.cat-section-grid');
+    grids.forEach(grid => {
+      const indicators = grid.parentElement?.querySelector('.cat-section-indicators');
+      if (!indicators) return;
+      const items = grid.querySelectorAll('a');
+      const totalItems = items.length;
+      if (totalItems <= 3) { indicators.innerHTML = ''; return; }
+      const pages = Math.ceil(totalItems / 3);
+      indicators.innerHTML = Array.from({ length: pages }, (_, i) => 
+        `<span${i === 0 ? ' class="active"' : ''}></span>`
+      ).join('');
+      const updateIndicators = () => {
+        const scrollLeft = grid.scrollLeft;
+        const itemWidth = grid.clientWidth;
+        const currentPage = Math.round(scrollLeft / itemWidth);
+        indicators.querySelectorAll('span').forEach((dot, i) => {
+          dot.classList.toggle('active', i === currentPage);
+        });
+      };
+      grid.addEventListener('scroll', updateIndicators, { passive: true });
+      updateIndicators();
+    });
+  },
+
   _renderBrandsModal() {
     const modal = document.getElementById('categoriesModal');
     if (!modal) return;
@@ -2612,7 +2637,10 @@ window.StoreInit = {
         };
         if (catStyle === 'grid') {
           const catsHTML = normalCats.map(c => `<a href="#?cat=${c.id}" onclick="StoreInit._filterByCategory('${c.id}')" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px 15px;background:#fff;border:1px solid var(--gray-200);border-radius:16px;text-decoration:none;color:inherit;transition:0.2s;box-shadow:var(--shadow-sm);">${catIconHTML(c, 60)}<span style="font-weight:700;font-size:13px;text-align:center;">${c.name}</span></a>`).join('');
-          return `<div style="margin:30px 0;">${header}<div class="cat-section-grid">${catsHTML}</div></div>`;
+          const html = `<div style="margin:30px 0;">${header}<div class="cat-section-grid">${catsHTML}</div><div class="cat-section-indicators" style="display:flex;justify-content:center;gap:6px;margin-top:8px;"></div></div>`;
+          // Setup indicators after render
+          setTimeout(() => this._setupCatSectionIndicators(), 0);
+          return html;
         } else if (catStyle === 'list') {
           const catsHTML = normalCats.map(c => `<a href="#?cat=${c.id}" onclick="StoreInit._filterByCategory('${c.id}')" style="flex-shrink:0;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:10px;min-width:120px;padding:15px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:14px;text-decoration:none;color:inherit;">${catIconHTML(c, 50)}<span style="font-weight:700;font-size:11px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${c.name}</span></a>`).join('');
           return `<div style="margin:30px 0;">${header}<div style="display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;-webkit-overflow-scrolling:touch;">${catsHTML}</div></div>`;
