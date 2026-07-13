@@ -2285,6 +2285,24 @@ window.StoreInit = {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
+  _switchCategoryTab(btn, catId) {
+    // Update tab buttons
+    btn.parentElement.querySelectorAll('.cat-tab-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = 'var(--gray-100)';
+      b.style.color = 'var(--dark)';
+    });
+    btn.classList.add('active');
+    btn.style.background = 'var(--primary)';
+    btn.style.color = '#fff';
+
+    // Show corresponding panel
+    const container = btn.closest('.cat-tabs-container').parentElement;
+    container.querySelectorAll('.cat-tab-panel').forEach(panel => {
+      panel.style.display = panel.dataset.cat === catId ? 'grid' : 'none';
+    });
+  },
+
   _highlightActiveCategory(catId) {
     document.querySelectorAll('.cat-item, .brand-modal-item').forEach(el => {
       const href = el.getAttribute('href') || '';
@@ -2628,12 +2646,26 @@ window.StoreInit = {
         return `<div style="margin:30px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:15px;">${items.map(it => `<div style="background:#fff;border:1px solid var(--gray-200);border-radius:16px;padding:20px;text-align:center;"><i class="fas ${it.icon || 'fa-check'}" style="font-size:26px;color:${s.iconColor || 'var(--primary)'};"></i><div style="font-weight:800;margin-top:10px;">${it.title || it.text || ''}</div>${it.desc ? `<div style="font-size:12px;color:var(--gray-600);margin-top:4px;">${it.desc}</div>` : ''}</div>`).join('')}</div>`;
       case 'category_tabs': {
         const catIds = s.categoryIds || [];
-        let list = visibleProducts.filter(p => {
-          const cats = Array.isArray(p.categories) ? p.categories : (p.category ? [String(p.category)] : []);
-          return cats.map(String).some(c => catIds.map(String).includes(c));
-        });
-        if (s.limit) list = list.slice(0, s.limit);
-        return `<div style="margin:30px 0;">${renderHeaderRow(s.title || 'أقسامنا', 'fas fa-tags')}${gridOf(list)}</div>`;
+        const selectedCats = this.categories.filter(c => catIds.map(String).includes(String(c.id)));
+        if (!selectedCats.length) return '';
+        
+        const currency = this.settings.currency || '₪';
+        const header = s.title ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:30px 0 15px;width:100%;"><h2 class="section-title" style="font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin:0;"><i class="fas fa-tags" style="color:var(--primary);"></i> ${s.title}</h2></div>` : '';
+        
+        // Build tabs
+        const tabsHTML = selectedCats.map((cat, i) => `<button class="cat-tab-btn${i === 0 ? ' active' : ''}" data-cat="${cat.id}" onclick="StoreInit._switchCategoryTab(this, '${cat.id}')" style="padding:10px 18px;border:none;background:${i === 0 ? 'var(--primary)' : 'var(--gray-100)'};color:${i === 0 ? '#fff' : 'var(--dark)'};border-radius:50px;font-weight:800;font-size:13px;cursor:pointer;transition:0.2s;white-space:nowrap;">${cat.name}</button>`).join('');
+        
+        // Build panels
+        const panelsHTML = selectedCats.map((cat, i) => {
+          let list = visibleProducts.filter(p => {
+            const cats = Array.isArray(p.categories) ? p.categories : (p.category ? [String(p.category)] : []);
+            return cats.map(String).includes(String(cat.id));
+          });
+          if (s.limit) list = list.slice(0, s.limit);
+          return `<div class="cat-tab-panel${i === 0 ? ' active' : ''}" data-cat="${cat.id}" style="display:${i === 0 ? 'grid' : 'none'};">${gridOf(list)}</div>`;
+        }).join('');
+        
+        return `<div style="margin:30px 0;">${header}<div class="cat-tabs-container" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;">${tabsHTML}</div>${panelsHTML}</div>`;
       }
       case 'logo_marquee': {
         const logos = s.logos || [];
