@@ -10639,10 +10639,10 @@ function printOrderInvoice() {
                 monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
             }
             const [year, mon] = monthInput.value.split('-');
+            const y = parseInt(year), m = parseInt(mon);
             const monthNames = ['يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-            const monthName = monthNames[parseInt(mon) - 1] || mon;
+            const monthName = monthNames[m - 1] || mon;
 
-            // Fetch orders if not loaded yet
             if (!window.storeOrdersData) {
                 try {
                     const orders = await DB.getOrders();
@@ -10652,76 +10652,112 @@ function printOrderInvoice() {
                 }
             }
             const orders = window.storeOrdersData;
-            const monthOrders = orders.filter(o => {
-                const d = new Date(o.date || o.createdAt);
-                return !isNaN(d.getTime()) && d.getFullYear() == parseInt(year) && (d.getMonth() + 1) == parseInt(mon);
+
+            // Build product cost map from allProducts (wholesalePrice as cost)
+            const costMap = {};
+            (window.allProducts || []).forEach(p => {
+                costMap[p.id] = parseFloat(p.wholesalePrice) > 0 ? parseFloat(p.wholesalePrice) : 0;
             });
 
-            const totalOrders = monthOrders.length;
-            const totalRevenue = monthOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
-            const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            function filterMonth(ord, yy, mm) {
+                const d = new Date(ord.date || ord.createdAt);
+                return !isNaN(d.getTime()) && d.getFullYear() === yy && (d.getMonth() + 1) === mm;
+            }
 
-            // Count products sold
-            const productMap = {};
-            monthOrders.forEach(o => {
-                (o.items || []).forEach(item => {
-                    const key = item.id || item.productId || item.name || 'unknown';
-                    if (!productMap[key]) {
-                        productMap[key] = { name: item.name || 'منتج', qty: 0, total: 0, price: parseFloat(item.price) || 0 };
-                    }
-                    const qty = parseInt(item.quantity) || 1;
-                    productMap[key].qty += qty;
-                    productMap[key].total += productMap[key].price * qty;
+            function calcStats(ordList) {
+                const total = ordList.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+                const count = ordList.length;
+                const items = {};
+                let costTotal = 0;
+                ordList.forEach(o => {
+                    (o.items || []).forEach(item => {
+                        const key = item.id || item.productId || item.name || 'unknown';
+                        if (!items[key]) items[key] = { name: item.name || 'منتج', qty: 0, total: 0, price: parseFloat(item.price) || 0 };
+                        const q = parseInt(item.quantity) || 1;
+                        items[key].qty += q;
+                        items[key].total += items[key].price * q;
+                        const cost = costMap[item.id || item.productId] || 0;
+                        costTotal += cost * q;
+                    });
                 });
-            });
-            const totalItems = Object.values(productMap).reduce((s, p) => s + p.qty, 0);
-            const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty);
+                const totalItems = Object.values(items).reduce((s, p) => s + p.qty, 0);
+                const top = Object.values(items).sort((a, b) => b.qty - a.qty);
+                return { total, count, totalItems, top, avg: count > 0 ? total / count : 0, costTotal, profit: total - costTotal };
+            }
 
-            // Daily breakdown
+            const curStats = calcStats(orders.filter(o => filterMonth(o, y, m)));
+
+            // Previous month
+            let prevY = y, prevM = m - 1;
+            if (prevM === 0) { prevM = 12; prevY--; }
+            const prevStats = calcStats(orders.filter(o => filterMonth(o, prevY, prevM)));
+
+            function pctChange(cur, prev) {
+                if (prev === 0) return cur > 0 ? '100' : '0';
+                return ((cur - prev) / prev * 100).toFixed(1);
+            }
+
+            // Daily breakdown with chart
             const dailyMap = {};
-            monthOrders.forEach(o => {
+            orders.filter(o => filterMonth(o, y, m)).forEach(o => {
                 const d = new Date(o.date || o.createdAt);
                 const day = d.getDate();
                 dailyMap[day] = dailyMap[day] || { count: 0, revenue: 0 };
                 dailyMap[day].count++;
                 dailyMap[day].revenue += parseFloat(o.total) || 0;
             });
-
-            const daysInMonth = new Date(parseInt(year), parseInt(mon), 0).getDate();
-            let dailyHTML = '';
+            const daysInMonth = new Date(y, m, 0).getDate();
+            const maxRevenue = Math.max(...Object.values(dailyMap).map(d => d.revenue), 1);
+            let dailyHTML = '', chartBars = '';
             for (let d = 1; d <= daysInMonth; d++) {
-                const dayData = dailyMap[d] || { count: 0, revenue: 0 };
-                dailyHTML += `
-                    <tr>
-                        <td style="padding:8px 12px;font-weight:700;">${d}</td>
-                        <td style="padding:8px 12px;">${dayData.count}</td>
-                        <td style="padding:8px 12px;font-weight:800;color:var(--primary);">${dayData.revenue.toFixed(2)} ₪</td>
-                    </tr>
-                `;
+                const dd = dailyMap[d] || { count: 0, revenue: 0 };
+                const pct = (dd.revenue / maxRevenue * 100);
+                dailyHTML += `<tr><td style="padding:6px 10px;font-weight:700;">${d}</td><td style="padding:6px 10px;">${dd.count}</td><td style="padding:6px 10px;font-weight:800;color:var(--primary);">${dd.revenue.toFixed(2)} ₪</td></tr>`;
+                chartBars += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;"><span style="width:24px;font-size:10px;color:var(--text-muted);text-align:center;flex-shrink:0;">${d}</span><div style="flex:1;height:18px;background:#f1f5f9;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--primary),#818cf8);border-radius:4px;transition:width 0.3s;"></div></div><span style="width:55px;font-size:10px;font-weight:700;color:var(--dark);text-align:left;flex-shrink:0;">${dd.revenue.toFixed(0)}</span></div>`;
             }
 
             container.innerHTML = `
-                <div style="margin-bottom:20px;">
-                    <h4 style="font-weight:900;font-size:20px;margin:0 0 5px 0;color:var(--dark);">${monthName} ${year}</h4>
-                    <p style="margin:0;font-size:13px;color:var(--text-muted);">${totalOrders} طلب — ${totalItems} منتج مباع</p>
+                <style>
+                    @media print {
+                        body * { visibility: hidden; }
+                        #tab-monthly, #tab-monthly * { visibility: visible; }
+                        #tab-monthly { position: absolute; left: 0; top: 0; width: 100%; }
+                        .sidebar, .top-nav, .no-print { display: none !important; }
+                    }
+                </style>
+                <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <h4 style="font-weight:900;font-size:22px;margin:0 0 5px 0;color:var(--dark);">${monthName} ${year}</h4>
+                        <p style="margin:0;font-size:13px;color:var(--text-muted);">${curStats.count} طلب — ${curStats.totalItems} منتج مباع — إجمالي ${curStats.total.toFixed(2)} ₪</p>
+                    </div>
+                    <button onclick="printMonthlyReport()" style="padding:10px 20px;background:white;border:1px solid var(--border);border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;"><i class="fas fa-print"></i> طباعة التقرير</button>
                 </div>
 
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:25px;">
-                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
-                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">إجمالي المبيعات</div>
-                        <div style="font-size:28px;font-weight:900;color:var(--primary);">${totalRevenue.toFixed(2)} ₪</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:25px;">
+                    <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">إجمالي المبيعات</div>
+                        <div style="font-size:26px;font-weight:900;color:var(--primary);">${curStats.total.toFixed(2)} ₪</div>
+                        <div style="font-size:11px;margin-top:4px;color:${prevStats.total > curStats.total ? '#ef4444' : '#10b981'};font-weight:700;">${pctChange(curStats.total, prevStats.total)}% عن الشهر السابق</div>
                     </div>
-                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
-                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">عدد الطلبات</div>
-                        <div style="font-size:28px;font-weight:900;color:var(--dark);">${totalOrders}</div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">صافي الربح (تقديري)</div>
+                        <div style="font-size:26px;font-weight:900;color:#10b981;">${Math.max(0, curStats.profit).toFixed(2)} ₪</div>
+                        <div style="font-size:11px;margin-top:4px;color:var(--text-muted);font-weight:600;">${curStats.profit > 0 ? (curStats.profit / curStats.total * 100).toFixed(1) : 0}% هامش ربح</div>
                     </div>
-                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
-                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">متوسط قيمة الطلب</div>
-                        <div style="font-size:28px;font-weight:900;color:#10b981;">${avgOrder.toFixed(2)} ₪</div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">عدد الطلبات</div>
+                        <div style="font-size:26px;font-weight:900;color:var(--dark);">${curStats.count}</div>
+                        <div style="font-size:11px;margin-top:4px;color:${prevStats.count > curStats.count ? '#ef4444' : '#10b981'};font-weight:700;">${pctChange(curStats.count, prevStats.count)}% عن السابق</div>
                     </div>
-                    <div style="background:white;border:1px solid var(--border);border-radius:16px;padding:20px;text-align:center;">
-                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">منتجات مباعة</div>
-                        <div style="font-size:28px;font-weight:900;color:#f59e0b;">${totalItems}</div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">متوسط الطلب</div>
+                        <div style="font-size:26px;font-weight:900;color:#6366f1;">${curStats.avg.toFixed(2)} ₪</div>
+                        <div style="font-size:11px;margin-top:4px;color:var(--text-muted);font-weight:600;">${prevStats.avg.toFixed(2)} ₪ الشهر الماضي</div>
+                    </div>
+                    <div style="background:white;border:1px solid var(--border);border-radius:14px;padding:18px;text-align:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">منتجات مباعة</div>
+                        <div style="font-size:26px;font-weight:900;color:#f59e0b;">${curStats.totalItems}</div>
+                        <div style="font-size:11px;margin-top:4px;color:${prevStats.totalItems > curStats.totalItems ? '#ef4444' : '#10b981'};font-weight:700;">${pctChange(curStats.totalItems, prevStats.totalItems)}% عن السابق</div>
                     </div>
                 </div>
 
@@ -10731,17 +10767,11 @@ function printOrderInvoice() {
                             <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-crown" style="color:#f59e0b;margin-left:8px;"></i> الأكثر مبيعاً</h4>
                         </div>
                         <div style="padding:0;">
-                            ${topProducts.length > 0 ? `
+                            ${curStats.top.length > 0 ? `
                             <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                                <thead>
-                                    <tr style="background:#f8fafc;">
-                                        <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">المنتج</th>
-                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الكمية</th>
-                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الإجمالي</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr style="background:#f8fafc;"><th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">المنتج</th><th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الكمية</th><th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الإجمالي</th></tr></thead>
                                 <tbody>
-                                    ${topProducts.slice(0, 20).map((p, i) => `
+                                    ${curStats.top.slice(0, 20).map((p, i) => `
                                         <tr style="border-top:1px solid #f1f5f9;">
                                             <td style="padding:10px 15px;font-weight:700;display:flex;align-items:center;gap:8px;">
                                                 <span style="width:22px;height:22px;border-radius:50%;background:${i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : '#f1f5f9'};color:${i < 3 ? 'white' : 'var(--text-muted)'};display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0;">${i + 1}</span>
@@ -10758,50 +10788,86 @@ function printOrderInvoice() {
 
                     <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
                         <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
-                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-calendar-day" style="color:var(--primary);margin-left:8px;"></i> توزيع المبيعات اليومي</h4>
+                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-chart-bar" style="color:var(--primary);margin-left:8px;"></i> الرسم البياني اليومي</h4>
                         </div>
-                        <div style="padding:0;max-height:400px;overflow-y:auto;">
+                        <div style="padding:15px 20px;">
+                            ${chartBars || '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:14px;">لا توجد بيانات</div>'}
+                        </div>
+                        <div style="border-top:1px solid var(--border);padding:10px 15px;max-height:250px;overflow-y:auto;">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                <thead><tr style="background:#f8fafc;"><th style="padding:6px 10px;text-align:right;font-size:10px;color:var(--text-muted);">اليوم</th><th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--text-muted);">الطلبات</th><th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--text-muted);">الإيرادات</th></tr></thead>
+                                <tbody>${dailyHTML}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:25px;">
+                    <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+                        <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
+                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-history" style="color:var(--text-muted);margin-left:8px;"></i> مقارنة مع ${monthNames[prevM - 1]} ${prevY}</h4>
+                        </div>
+                        <div style="padding:15px 20px;">
                             <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                                <thead>
-                                    <tr style="background:#f8fafc;position:sticky;top:0;">
-                                        <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">اليوم</th>
-                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الطلبات</th>
-                                        <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الإيرادات</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr style="background:#f8fafc;"><th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--text-muted);">المؤشر</th><th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);">هذا الشهر</th><th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);">الشهر الماضي</th><th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-muted);">التغير</th></tr></thead>
                                 <tbody>
-                                    ${dailyHTML}
+                                    ${[
+                                        { label: 'إجمالي المبيعات', cur: curStats.total, prev: prevStats.total, unit: '₪' },
+                                        { label: 'عدد الطلبات', cur: curStats.count, prev: prevStats.count, unit: '' },
+                                        { label: 'منتجات مباعة', cur: curStats.totalItems, prev: prevStats.totalItems, unit: '' },
+                                        { label: 'متوسط الطلب', cur: curStats.avg, prev: prevStats.avg, unit: '₪' },
+                                    ].map(r => {
+                                        const chg = pctChange(r.cur, r.prev);
+                                        const isUp = parseFloat(chg) >= 0;
+                                        return `<tr style="border-top:1px solid #f1f5f9;">
+                                            <td style="padding:8px 12px;font-weight:700;">${r.label}</td>
+                                            <td style="padding:8px 12px;text-align:center;font-weight:800;">${r.cur.toFixed(r.unit === '₪' ? 2 : 0)} ${r.unit}</td>
+                                            <td style="padding:8px 12px;text-align:center;color:var(--text-muted);">${r.prev.toFixed(r.unit === '₪' ? 2 : 0)} ${r.unit}</td>
+                                            <td style="padding:8px 12px;text-align:center;font-weight:800;color:${isUp ? '#10b981' : '#ef4444'};">${isUp ? '▲' : '▼'} ${Math.abs(parseFloat(chg))}%</td>
+                                        </tr>`;
+                                    }).join('')}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
+                        <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
+                            <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-percentage" style="color:#10b981;margin-left:8px;"></i> تحليل الأرباح</h4>
+                        </div>
+                        <div style="padding:15px 20px;">
+                            <div style="margin-bottom:15px;">
+                                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="font-weight:700;">الإيرادات</span><span style="font-weight:900;color:var(--primary);">${curStats.total.toFixed(2)} ₪</span></div>
+                                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="font-weight:700;">التكاليف (سعر الجملة)</span><span style="font-weight:900;color:#ef4444;">${curStats.costTotal.toFixed(2)} ₪</span></div>
+                                <div style="border-top:2px solid var(--border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;font-size:16px;"><span style="font-weight:900;">صافي الربح</span><span style="font-weight:900;color:#10b981;">${Math.max(0, curStats.profit).toFixed(2)} ₪</span></div>
+                            </div>
+                            ${curStats.total > 0 ? `
+                            <div style="background:#f8fafc;border-radius:10px;padding:15px;">
+                                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span>نسبة هامش الربح</span><span style="font-weight:800;">${(curStats.profit / curStats.total * 100).toFixed(1)}%</span></div>
+                                <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+                                    <div style="height:100%;width:${Math.min(100, Math.max(0, curStats.profit / curStats.total * 100))}%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:4px;"></div>
+                                </div>
+                                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:5px;"><span>0%</span><span>100%</span></div>
+                            </div>` : ''}
                         </div>
                     </div>
                 </div>
 
                 <div class="panel" style="border:1px solid var(--border);border-radius:16px;overflow:hidden;">
                     <div class="panel-header" style="border-bottom:1px solid var(--border);padding:15px 20px;">
-                        <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-list" style="color:var(--primary);margin-left:8px;"></i> طلبات الشهر (${totalOrders})</h4>
+                        <h4 style="margin:0;font-weight:800;font-size:14px;"><i class="fas fa-list" style="color:var(--primary);margin-left:8px;"></i> طلبات الشهر (${curStats.count})</h4>
                     </div>
                     <div style="max-height:500px;overflow-y:auto;">
-                        ${monthOrders.length > 0 ? `
+                        ${curStats.count > 0 ? `
                         <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                            <thead>
-                                <tr style="background:#f8fafc;position:sticky;top:0;">
-                                    <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">#</th>
-                                    <th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">العميل</th>
-                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">المبلغ</th>
-                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الحالة</th>
-                                    <th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">التاريخ</th>
-                                </tr>
-                            </thead>
+                            <thead><tr style="background:#f8fafc;position:sticky;top:0;"><th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">#</th><th style="padding:10px 15px;text-align:right;font-size:11px;color:var(--text-muted);">العميل</th><th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">المبلغ</th><th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">الحالة</th><th style="padding:10px 15px;text-align:center;font-size:11px;color:var(--text-muted);">التاريخ</th></tr></thead>
                             <tbody>
-                                ${monthOrders.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).map(o => `
+                                ${orders.filter(o => filterMonth(o, y, m)).sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)).map(o => `
                                     <tr style="border-top:1px solid #f1f5f9;cursor:pointer;" onclick="viewOrder('${o.id}')" class="hover-row">
                                         <td style="padding:10px 15px;font-weight:800;color:var(--primary);">#${o.id}</td>
                                         <td style="padding:10px 15px;font-weight:700;">${o.customer?.name || o.customerName || '—'}</td>
                                         <td style="padding:10px 15px;text-align:center;font-weight:800;color:var(--primary);">${(parseFloat(o.total) || 0).toFixed(2)} ₪</td>
-                                        <td style="padding:10px 15px;text-align:center;">
-                                            <span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;background:${o.status === 'مكتمل' ? '#f0fdf4' : '#fffbeb'};color:${o.status === 'مكتمل' ? '#166534' : '#92400e'};border:1px solid ${o.status === 'مكتمل' ? '#bbf7d0' : '#fef3c7'};">${o.status}</span>
-                                        </td>
+                                        <td style="padding:10px 15px;text-align:center;"><span style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;background:${o.status === 'مكتمل' ? '#f0fdf4' : '#fffbeb'};color:${o.status === 'مكتمل' ? '#166534' : '#92400e'};border:1px solid ${o.status === 'مكتمل' ? '#bbf7d0' : '#fef3c7'};">${o.status}</span></td>
                                         <td style="padding:10px 15px;text-align:center;font-size:12px;color:var(--text-muted);">${new Date(o.date || o.createdAt).toLocaleDateString('ar-EG')}</td>
                                     </tr>
                                 `).join('')}
@@ -10810,6 +10876,27 @@ function printOrderInvoice() {
                     </div>
                 </div>
             `;
+        }
+
+        function printMonthlyReport() {
+            const content = document.getElementById('tab-monthly');
+            if (!content) return;
+            const origDisplay = content.style.display;
+            content.style.display = 'block';
+            content.style.position = 'absolute';
+            content.style.left = '0';
+            content.style.top = '0';
+            content.style.width = '100%';
+            content.style.zIndex = '9999';
+            content.style.background = '#fff';
+            window.print();
+            content.style.display = origDisplay;
+            content.style.position = '';
+            content.style.left = '';
+            content.style.top = '';
+            content.style.width = '';
+            content.style.zIndex = '';
+            content.style.background = '';
         }
 
 window.addNewPopupCampaign = addNewPopupCampaign;
