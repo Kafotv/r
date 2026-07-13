@@ -207,8 +207,8 @@ window.StoreInit = {
       this._showPage(pageSlug);
       return;
     }
-    // No deep link → show homepage
-    this._filterByCategory('all');
+    // No deep link → show homepage (not catalog)
+    this._showHomePage();
     this._hideProductPage();
   },
 
@@ -1094,9 +1094,25 @@ window.StoreInit = {
     if (window.location.hash) {
       window.location.hash = '';
     } else {
-      this._filterByCategory('all');
+      this._showHomePage();
       this._hideProductPage();
     }
+  },
+
+  _showHomePage() {
+    // Show home sections (main page with hero, sections, etc.)
+    const homeWrap = document.getElementById('homeSectionsWrap');
+    if (homeWrap) homeWrap.style.display = 'block';
+    const grid = document.getElementById('storeProductsGrid');
+    if (grid) grid.style.display = 'none';
+    const catPageWrap = document.getElementById('categoryPageWrap');
+    if (catPageWrap) catPageWrap.style.display = 'none';
+    const footer = document.querySelector('.main-footer');
+    if (footer) footer.style.display = 'block';
+    const main = document.querySelector('.main-container');
+    if (main) main.style.display = '';
+
+    this._highlightActiveCategory('all');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
@@ -2159,48 +2175,16 @@ window.StoreInit = {
     this.activeCategory = catId;
     this.activeSort = sortVal;
 
-    if (catId === 'all') {
-      const homeWrap = document.getElementById('homeSectionsWrap');
-      if (homeWrap) homeWrap.style.display = 'none';
-      const grid = document.getElementById('storeProductsGrid');
-      if (grid) grid.style.display = 'none';
-      const footer = document.querySelector('.main-footer');
-      if (footer) footer.style.display = 'block';
-      const main = document.querySelector('.main-container');
-      if (main) main.style.display = '';
+    // Check if this is an explicit "all products catalog" request (hash contains cat=all)
+    const isExplicitAllCatalog = catId === 'all' && (window.location.hash.includes('cat=all') || window.location.search.includes('cat=all'));
 
-      // Show all products with full category page UI
-      let visibleProducts = [...this.products].filter(p => !p.advanced || !p.advanced.hiddenProduct);
-      visibleProducts = this._applySort(visibleProducts, sortVal);
+    if (catId === 'all' && !isExplicitAllCatalog) {
+      // Home page - show home sections
+      this._showHomePage();
+      return;
+    }
 
-      const content = document.getElementById('publicMarketingContent');
-      if (!content) return;
-
-      let catPageWrap = document.getElementById('categoryPageWrap');
-      if (!catPageWrap) {
-        catPageWrap = document.createElement('div');
-        catPageWrap.id = 'categoryPageWrap';
-        content.appendChild(catPageWrap);
-      }
-      catPageWrap.style.display = 'block';
-
-      // Breadcrumbs for "All Products"
-      let breadcrumbsHTML = `
-        <nav class="breadcrumbs" style="margin-bottom:20px; font-size:13px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; gap:8px;">
-            <a href="#?cat=all" onclick="StoreInit._filterByCategory('all')" style="color:inherit; text-decoration:none;">الرئيسية</a>
-            <i class="fa fa-chevron-left" style="font-size:9px; opacity:0.5;"></i>
-            <span style="color:var(--dark);">جميع المنتجات</span>
-      `;
-
-      // Category hero
-      const categoryHeroHTML = `
-        <div style="text-align:center; padding:30px 15px; background:linear-gradient(135deg,var(--primary-light),#fff); border-radius:16px; margin-bottom:20px; border:1px solid var(--primary-light);">
-          <h1 style="font-size:24px; font-weight:900; color:var(--dark); margin:0 0 8px;">جميع المنتجات</h1>
-          <p style="color:var(--gray-600); font-size:14px; margin:0;">${visibleProducts.length} منتج متاح</p>
-        </div>
-      `;
-
-      // Sort dropdown
+    if (catId === 'all' && isExplicitAllCatalog) {
       const sortHTML = `
         <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
             <h2 class="section-title" style="margin:0;">جميع المنتجات <span style="font-size:14px; font-weight:400; color:var(--gray-400); margin-right:8px;">(${visibleProducts.length} منتج)</span></h2>
