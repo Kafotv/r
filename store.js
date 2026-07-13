@@ -661,9 +661,15 @@
                     if (document.getElementById('floatingCartCount')) document.getElementById('floatingCartCount').innerText = '0';
                     const floatBar = document.getElementById('floatingCartBar');
                     if (floatBar) floatBar.style.display = 'none';
-                    const modalBody = document.querySelector('#cartModal .modal-body');
-                    if (modalBody) {
-                        modalBody.innerHTML = `<div style="text-align:center; padding:35px 15px; background:#fff; border-radius:20px; direction:rtl;">
+                    const itemsContainer = document.getElementById('cartModalItems');
+                    const stepItems = document.getElementById('cartStepItems');
+                    const stepCheckout = document.getElementById('cartStepCheckout');
+                    const stepPayment = document.getElementById('cartStepPayment');
+                    if (stepItems) stepItems.style.display = 'block';
+                    if (stepCheckout) stepCheckout.style.display = 'none';
+                    if (stepPayment) stepPayment.style.display = 'none';
+                    if (itemsContainer) {
+                        itemsContainer.innerHTML = `<div style="text-align:center; padding:35px 15px; background:#fff; border-radius:20px; direction:rtl;">
                             <div style="width:80px;height:80px;background:#dcfce7;color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 20px;"><i class="fa fa-check"></i></div>
                             <h3 style="font-weight:900;margin-bottom:10px;font-size:22px;color:var(--dark);">تم استلام طلبك بنجاح! 🎉</h3>
                             <p style="color:#64748b;font-size:14px;margin-bottom:20px;line-height:1.6;">سنقوم بالتواصل معك قريباً لتأكيد الطلب وترتيب عملية التوصيل.</p>
