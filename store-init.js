@@ -383,7 +383,7 @@ window.StoreInit = {
           <div class="section-header" style="margin-bottom:20px;">
             <h2 class="section-title" style="font-size:22px; font-weight:800; border-bottom:2.5px solid var(--primary); padding-bottom:8px; display:inline-block;">منتجات قد تعجبك أيضاً</h2>
           </div>
-          <div class="product-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:20px;">
+          <div class="product-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:16px;">
             ${relatedProducts.map(p => this._productCardHTML(p)).join('')}
           </div>
         </div>`;
