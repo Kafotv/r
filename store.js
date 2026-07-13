@@ -1170,6 +1170,7 @@
             const phone = localStorage.getItem('distributorPhone');
             const id = localStorage.getItem('distributorId');
             if (isAdmin || (phone && id)) {
+                history.replaceState(null, '', window.location.pathname + '#?app=distributor');
                 checkDistributorSession(true);
                 if (window.togglePublicStore) window.togglePublicStore(false);
                 const sec = document.getElementById('distDashboardSection');
@@ -1184,6 +1185,7 @@
             const publicSection = document.getElementById('publicMarketingContent');
             const returnBtn = document.getElementById('btnReturnToDash');
             if (showPublic) {
+                history.replaceState(null, '', window.location.pathname + window.location.search);
                 if (distSection) distSection.style.display = 'none';
                 if (publicSection) publicSection.style.display = 'block';
                 if (returnBtn) returnBtn.style.display = 'flex';
