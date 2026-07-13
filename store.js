@@ -1005,52 +1005,66 @@
                     const statusColor = statusColors[order.status] || 'var(--gray-600)';
 
                     let itemsHTML = items.map((item, i) => `
-                        <div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--gray-100);">
-                            ${item.image ? `<img src="${item.image}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;">` : ''}
-                            <div style="flex:1;">
-                                <div style="font-weight:700; font-size:13px; color:var(--dark);">${item.name || 'منتج'}</div>
+                        <div style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--gray-100);">
+                            ${item.image ? `<img src="${item.image}" style="width:65px;height:65px;border-radius:10px;object-fit:cover;border:1px solid var(--gray-200);">` : ''}
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:800; font-size:14px; color:var(--dark);">${item.name || 'منتج'}</div>
                                 <div style="font-size:12px; color:var(--gray-400);">الكمية: ${item.quantity || 1}</div>
                             </div>
-                            <div style="font-weight:800; font-size:14px; color:var(--primary);">${parseFloat(item.price || 0).toFixed(2)} ₪</div>
+                            <div style="font-weight:900; font-size:16px; color:var(--primary); white-space:nowrap;">${parseFloat(item.price || 0).toFixed(2)} ₪</div>
                         </div>
-                    `).join('') || '<div style="color:var(--gray-400); padding:10px 0;">لا توجد منتجات</div>';
+                    `).join('') || '<div style="color:var(--gray-400); padding:10px 0; text-align:center;">لا توجد منتجات</div>';
+
+                    let customerSections = '';
+                    if (name || phone || city || address) {
+                        customerSections = `
+                            <div style="border:1px solid var(--gray-200); border-radius:12px; overflow:hidden;">
+                                <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'grid':'none';this.querySelector('.toggle-icon').classList.toggle('fa-chevron-up');this.querySelector('.toggle-icon').classList.toggle('fa-chevron-down');" style="display:flex; align-items:center; gap:8px; padding:12px 15px; background:var(--gray-100); cursor:pointer; font-weight:700; font-size:13px; user-select:none;">
+                                    <i class="fas fa-truck" style="color:var(--primary); font-size:14px;"></i>
+                                    معلومات التوصيل
+                                    <i class="fas fa-chevron-down toggle-icon" style="margin-right:auto; font-size:12px; color:var(--gray-400);"></i>
+                                </div>
+                                <div style="padding:15px; display:none; grid-template-columns:1fr; gap:12px;">
+                                    ${name ? `<div style="display:flex; align-items:center; gap:8px;"><i class="fas fa-user" style="width:18px; color:var(--gray-400); font-size:13px;"></i><span style="font-weight:600; font-size:13px;">${name}</span></div>` : ''}
+                                    ${phone ? `<div style="display:flex; align-items:center; gap:8px;"><i class="fas fa-phone" style="width:18px; color:var(--gray-400); font-size:13px;"></i><span style="font-weight:600; font-size:13px; direction:ltr; text-align:left;">${phone}</span></div>` : ''}
+                                    ${city ? `<div style="display:flex; align-items:center; gap:8px;"><i class="fas fa-city" style="width:18px; color:var(--gray-400); font-size:13px;"></i><span style="font-weight:600; font-size:13px;">${city}</span></div>` : ''}
+                                    ${address ? `<div style="display:flex; align-items:flex-start; gap:8px;"><i class="fas fa-map-marker-alt" style="width:18px; color:var(--gray-400); font-size:13px; margin-top:2px;"></i><span style="font-weight:600; font-size:13px; flex:1;">${address}</span></div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
 
                     body.innerHTML = `
                         <div style="display:grid; gap:15px;">
-                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">الحالة</span>
-                                <span style="font-weight:800; color:${statusColor};">${order.status || 'جديد'}</span>
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1; padding:15px; background:var(--gray-100); border-radius:12px; text-align:center;">
+                                    <div style="font-size:12px; color:var(--gray-400); margin-bottom:5px;">الحالة</div>
+                                    <div style="font-weight:800; font-size:14px; color:${statusColor};">${order.status || 'جديد'}</div>
+                                </div>
+                                <div style="flex:1; padding:15px; background:var(--gray-100); border-radius:12px; text-align:center;">
+                                    <div style="font-size:12px; color:var(--gray-400); margin-bottom:5px;">التاريخ</div>
+                                    <div style="font-weight:800; font-size:14px;">${new Date(order.created_at || order.date).toLocaleDateString('ar-EG')}</div>
+                                </div>
+                                <div style="flex:1; padding:15px; background:var(--gray-100); border-radius:12px; text-align:center;">
+                                    <div style="font-size:12px; color:var(--gray-400); margin-bottom:5px;">الإجمالي</div>
+                                    <div style="font-weight:900; font-size:16px; color:var(--primary);">${parseFloat(order.total || 0).toFixed(2)} ₪</div>
+                                </div>
                             </div>
-                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">التاريخ</span>
-                                <span style="font-weight:700;">${new Date(order.created_at || order.date).toLocaleDateString('ar-EG')}</span>
+
+                            <div>
+                                <h4 style="font-size:15px; font-weight:800; margin:0 0 10px 0; color:var(--dark); display:flex; align-items:center; gap:6px;">
+                                    <i class="fas fa-box" style="color:var(--primary); font-size:14px;"></i> المنتجات
+                                </h4>
+                                <div style="max-height:300px; overflow-y:auto; border:1px solid var(--gray-200); border-radius:12px; padding:0 12px;">
+                                    ${itemsHTML}
+                                </div>
                             </div>
-                            ${name ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">الاسم</span>
-                                <span style="font-weight:700;">${name}</span>
-                            </div>` : ''}
-                            ${phone ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">رقم الجوال</span>
-                                <span style="font-weight:700; direction:ltr; text-align:left;">${phone}</span>
-                            </div>` : ''}
-                            ${city ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">المدينة</span>
-                                <span style="font-weight:700;">${city}</span>
-                            </div>` : ''}
-                            ${address ? `<div style="display:flex; justify-content:space-between; padding:15px; background:var(--gray-100); border-radius:12px;">
-                                <span style="font-weight:700; color:var(--gray-600);">العنوان</span>
-                                <span style="font-weight:700; flex:1; text-align:left; font-size:13px;">${address}</span>
-                            </div>` : ''}
-                            <div style="margin-top:10px;">
-                                <h4 style="font-size:15px; font-weight:800; margin:0 0 10px 0; color:var(--dark);">المنتجات</h4>
-                                ${itemsHTML}
-                            </div>
-                            <div style="display:flex; justify-content:space-between; padding:15px; background:var(--primary); color:white; border-radius:12px; font-size:16px;">
-                                <span style="font-weight:800;">الإجمالي</span>
-                                <span style="font-weight:900;">${parseFloat(order.total || 0).toFixed(2)} ₪</span>
-                            </div>
-                            ${order.notes ? `<div style="padding:12px; background:#fef3c7; border-radius:10px; font-size:13px; color:#92400e;">
-                                <strong>ملاحظات:</strong> ${order.notes}
+
+                            ${customerSections}
+
+                            ${order.notes ? `<div style="padding:12px; background:#fef3c7; border-radius:10px; font-size:13px; color:#92400e; display:flex; align-items:flex-start; gap:8px;">
+                                <i class="fas fa-sticky-note" style="margin-top:2px;"></i>
+                                <span>${order.notes}</span>
                             </div>` : ''}
                         </div>
                     `;
