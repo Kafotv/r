@@ -2421,11 +2421,19 @@
         function updatePaginationUI(totalItems, totalPages) {
             const pagination = document.getElementById('ordersPagination');
             if (!pagination) return;
-            pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+            pagination.style.display = totalItems > 0 ? 'flex' : 'none';
 
             document.getElementById('paginationInfo').textContent = `إجمالي ${totalItems} طلب — صفحة ${ordersPage} من ${totalPages}`;
 
-            const pagesContainer = document.getElementById('paginationPages');
+            const pageNav = document.getElementById('paginationPages');
+            const firstBtn = document.getElementById('paginationFirst');
+            const prevBtn = document.getElementById('paginationPrev');
+            const nextBtn = document.getElementById('paginationNext');
+            const lastBtn = document.getElementById('paginationLast');
+            const showNav = totalPages > 1;
+            [firstBtn, prevBtn, nextBtn, lastBtn, pageNav].forEach(el => { if (el) el.style.display = showNav ? '' : 'none'; });
+            if (!showNav) return;
+
             let pagesHTML = '';
             const range = 2;
             const start = Math.max(1, ordersPage - range);
@@ -2441,16 +2449,16 @@
                 if (end < totalPages - 1) pagesHTML += `<span style="padding:0 3px;color:var(--gray-400);">...</span>`;
                 pagesHTML += `<button onclick="goToOrdersPage(${totalPages})" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:white;cursor:pointer;font-size:12px;color:var(--gray-600);">${totalPages}</button>`;
             }
-            pagesContainer.innerHTML = pagesHTML;
+            pageNav.innerHTML = pagesHTML;
 
-            document.getElementById('paginationFirst').style.opacity = ordersPage <= 1 ? '0.3' : '1';
-            document.getElementById('paginationFirst').disabled = ordersPage <= 1;
-            document.getElementById('paginationPrev').style.opacity = ordersPage <= 1 ? '0.3' : '1';
-            document.getElementById('paginationPrev').disabled = ordersPage <= 1;
-            document.getElementById('paginationNext').style.opacity = ordersPage >= totalPages ? '0.3' : '1';
-            document.getElementById('paginationNext').disabled = ordersPage >= totalPages;
-            document.getElementById('paginationLast').style.opacity = ordersPage >= totalPages ? '0.3' : '1';
-            document.getElementById('paginationLast').disabled = ordersPage >= totalPages;
+            firstBtn.style.opacity = ordersPage <= 1 ? '0.3' : '1';
+            firstBtn.disabled = ordersPage <= 1;
+            prevBtn.style.opacity = ordersPage <= 1 ? '0.3' : '1';
+            prevBtn.disabled = ordersPage <= 1;
+            nextBtn.style.opacity = ordersPage >= totalPages ? '0.3' : '1';
+            nextBtn.disabled = ordersPage >= totalPages;
+            lastBtn.style.opacity = ordersPage >= totalPages ? '0.3' : '1';
+            lastBtn.disabled = ordersPage >= totalPages;
         }
 
         function goToOrdersPage(page) {
