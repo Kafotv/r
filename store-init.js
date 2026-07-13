@@ -383,7 +383,7 @@ window.StoreInit = {
           <div class="section-header" style="margin-bottom:20px;">
             <h2 class="section-title" style="font-size:22px; font-weight:800; border-bottom:2.5px solid var(--primary); padding-bottom:8px; display:inline-block;">منتجات قد تعجبك أيضاً</h2>
           </div>
-          <div class="product-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:16px;">
+          <div class="product-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:12px;">
             ${relatedProducts.map(p => this._productCardHTML(p)).join('')}
           </div>
         </div>`;
@@ -2201,7 +2201,7 @@ window.StoreInit = {
       // Products grid
       const productsHTML = visibleProducts.map(p => this._productCardHTML(p)).join('');
       const gridHTML = productsHTML 
-        ? `<div class="product-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:15px;">${productsHTML}</div>` 
+        ? `<div class="product-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px;">${productsHTML}</div>` 
         : `<div style="text-align:center; padding:40px; color:var(--gray-400);"><i class="fa fa-shopping-bag" style="font-size:48px; opacity:0.2; margin-bottom:15px; display:block;"></i> لا توجد منتجات حالياً</div>`;
 
       catPageWrap.innerHTML = breadcrumbsHTML + categoryHeroHTML + sortHTML + gridHTML;
