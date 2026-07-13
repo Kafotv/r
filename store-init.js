@@ -1866,6 +1866,9 @@ window.StoreInit = {
     const catsList = modal.querySelector('.cats-mobile-list');
     if (catsList) catsList.innerHTML = normalCats;
 
+    // Setup scroll indicators for horizontal categories
+    this._setupCategoryIndicators(modal);
+
     // Pages links
     await this._loadPages();
     const pagesList = modal.querySelector('.cats-pages-list');
@@ -1876,6 +1879,35 @@ window.StoreInit = {
       });
       pagesList.innerHTML = pagesHTML;
     }
+  },
+
+  _setupCategoryIndicators(modal) {
+    const list = modal.querySelector('.cats-mobile-list');
+    const indicators = modal.querySelector('.cats-mobile-indicators');
+    if (!list || !indicators) return;
+
+    const groups = list.querySelectorAll('.cat-group');
+    const totalGroups = groups.length;
+    if (totalGroups <= 3) { indicators.innerHTML = ''; return; }
+
+    const pages = Math.ceil(totalGroups / 3);
+    indicators.innerHTML = Array.from({ length: pages }, (_, i) => 
+      `<span${i === 0 ? ' class="active"' : ''}></span>`
+    ).join('');
+
+    const updateIndicators = () => {
+      const scrollLeft = list.scrollLeft;
+      const itemWidth = list.clientWidth;
+      const currentPage = Math.round(scrollLeft / itemWidth);
+      indicators.querySelectorAll('span').forEach((dot, i) => {
+        dot.classList.toggle('active', i === currentPage);
+      });
+    };
+
+    list.addEventListener('scroll', updateIndicators, { passive: true });
+    modal.addEventListener('transitionend', updateIndicators);
+    // Also update when modal opens
+    updateIndicators();
   },
 
   _renderBrandsModal() {

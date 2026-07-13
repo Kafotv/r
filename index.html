@@ -957,6 +957,7 @@
 
                 <div class="cats-section-label">الأقسام</div>
                 <div class="cats-mobile-list"></div>
+                <div class="cats-mobile-indicators"></div>
 
                 <div class="cats-section-label" style="margin-top:20px;">العلامات التجارية</div>
                 <div class="cats-brands-grid"></div>
@@ -987,6 +988,9 @@
         .cats-mobile-list { display: flex; flex-direction: row; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px 12px; -webkit-overflow-scrolling: touch; scroll-padding: 0 16px; }
         .cats-mobile-list::-webkit-scrollbar { display: none; }
         .cats-mobile-list .cat-group { scroll-snap-align: start; flex: 0 0 calc(100% / 3 - 5px); min-width: calc(100% / 3 - 5px); }
+        .cats-mobile-indicators { display: flex; justify-content: center; gap: 6px; margin-top: 8px; padding-bottom: 4px; }
+        .cats-mobile-indicators span { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-300); transition: all 0.2s; }
+        .cats-mobile-indicators span.active { background: var(--primary); width: 20px; border-radius: 4px; }
         #categoriesModal .cat-group { position: relative; border-radius: 12px; overflow: visible; margin-bottom: 0; }
         #categoriesModal .cat-group:hover, #categoriesModal .cat-group:has(.active) { background: transparent; }
         #categoriesModal .cat-group>.cat-item { display: flex !important; align-items: center; justify-content: space-between; width: 100%; padding: 12px 14px !important; border-radius: 12px !important; background: var(--gray-100); color: var(--dark); text-decoration: none; font-weight: 700; font-size: 14px; transition: all 0.2s ease; box-sizing: border-box; border: 1.5px solid transparent; }
