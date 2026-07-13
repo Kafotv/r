@@ -576,7 +576,7 @@ window.StoreInit = {
 
       <style>
         .product-detail-view { background: #fff; border-radius: 20px; padding: 30px; border: 1px solid #eee; }
-        .product-main-info { display: flex; gap: 40px; align-items: flex-start; }
+        .product-main-info { display: flex; gap: 20px; align-items: flex-start; }
         .product-media { width: 45%; align-self: flex-start; position: relative; }
         @media (min-width: 992px) {
           .product-media { position: sticky; top: 80px; }
