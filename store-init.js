@@ -2163,22 +2163,73 @@ window.StoreInit = {
       const homeWrap = document.getElementById('homeSectionsWrap');
       if (homeWrap) homeWrap.style.display = 'none';
       const grid = document.getElementById('storeProductsGrid');
-      if (grid) grid.style.display = 'grid';
+      if (grid) grid.style.display = 'none';
       const catPageWrap = document.getElementById('categoryPageWrap');
-      if (catPageWrap) catPageWrap.style.display = 'none';
+      if (catPageWrap) catPageWrap.style.display = 'block';
       const footer = document.querySelector('.main-footer');
       if (footer) footer.style.display = 'block';
       const main = document.querySelector('.main-container');
       if (main) main.style.display = '';
 
-      // Show all products in grid
+      // Show all products with full category page UI
       let visibleProducts = [...this.products].filter(p => !p.advanced || !p.advanced.hiddenProduct);
       visibleProducts = this._applySort(visibleProducts, sortVal);
-      const gridEl = document.getElementById('storeProductsGrid');
-      if (gridEl) {
-        gridEl.innerHTML = visibleProducts.map(p => this._productCardHTML(p)).join('');
+
+      const content = document.getElementById('publicMarketingContent');
+      if (!content) return;
+
+      let catPageWrap = document.getElementById('categoryPageWrap');
+      if (!catPageWrap) {
+        catPageWrap = document.createElement('div');
+        catPageWrap.id = 'categoryPageWrap';
+        content.appendChild(catPageWrap);
       }
+      catPageWrap.style.display = 'block';
+
+      // Breadcrumbs for "All Products"
+      let breadcrumbsHTML = `
+        <nav class="breadcrumbs" style="margin-bottom:20px; font-size:13px; font-weight:700; color:var(--gray-600); display:flex; align-items:center; gap:8px;">
+            <a href="#?cat=all" onclick="StoreInit._filterByCategory('all')" style="color:inherit; text-decoration:none;">الرئيسية</a>
+            <i class="fa fa-chevron-left" style="font-size:9px; opacity:0.5;"></i>
+            <span style="color:var(--dark);">جميع المنتجات</span>
+      `;
+
+      // Category hero
+      const categoryHeroHTML = `
+        <div style="text-align:center; padding:30px 15px; background:linear-gradient(135deg,var(--primary-light),#fff); border-radius:16px; margin-bottom:20px; border:1px solid var(--primary-light);">
+          <h1 style="font-size:24px; font-weight:900; color:var(--dark); margin:0 0 8px;">جميع المنتجات</h1>
+          <p style="color:var(--gray-600); font-size:14px; margin:0;">${visibleProducts.length} منتج متاح</p>
+        </div>
+      `;
+
+      // Sort dropdown
+      const sortHTML = `
+        <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
+            <h2 class="section-title" style="margin:0;">جميع المنتجات <span style="font-size:14px; font-weight:400; color:var(--gray-400); margin-right:8px;">(${visibleProducts.length} منتج)</span></h2>
+            <div class="sort-box">
+                <select id="sort" style="padding:8px 15px; border-radius:8px; border:1px solid var(--gray-200); font-size:12px; font-weight:700; color:var(--gray-600); outline:none; cursor:pointer; background:var(--white);" onchange="StoreInit._filterByCategory('all', this.value)">
+                    <option value="default" ${this.activeSort === 'default' ? 'selected' : ''}>ترتيب افتراضي</option>
+                    <option value="price_asc" ${this.activeSort === 'price_asc' ? 'selected' : ''}>ترتيب السعر الأقل</option>
+                    <option value="price_desc" ${this.activeSort === 'price_desc' ? 'selected' : ''}>ترتيب السعر الأعلى</option>
+                    <option value="id_desc" ${this.activeSort === 'id_desc' ? 'selected' : ''}>الجديد أولاً</option>
+                    <option value="id_asc" ${this.activeSort === 'id_asc' ? 'selected' : ''}>القديم أولاً</option>
+                    <option value="title_asc" ${this.activeSort === 'title_asc' ? 'selected' : ''}>أبجدي أ-ي</option>
+                    <option value="title_desc" ${this.activeSort === 'title_desc' ? 'selected' : ''}>أبجدي ي-أ</option>
+                </select>
+            </div>
+        </div>
+      `;
+
+      // Products grid
+      const productsHTML = visibleProducts.map(p => this._productCardHTML(p)).join('');
+      const gridHTML = productsHTML 
+        ? `<div class="product-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:15px;">${productsHTML}</div>` 
+        : `<div style="text-align:center; padding:40px; color:var(--gray-400);"><i class="fa fa-shopping-bag" style="font-size:48px; opacity:0.2; margin-bottom:15px; display:block;"></i> لا توجد منتجات حالياً</div>`;
+
+      catPageWrap.innerHTML = breadcrumbsHTML + categoryHeroHTML + sortHTML + gridHTML;
+
       this._highlightActiveCategory('all');
+      if (window.applyDistributorPricing) window.applyDistributorPricing();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
