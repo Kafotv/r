@@ -391,15 +391,6 @@ window.StoreInit = {
 
     let productDetailHTML = `
       <div class="product-page-wrapper" style="max-width: 1450px; margin: 40px auto; padding: 0 5%; box-sizing: border-box;">
-      <nav class="breadcrumbs">
-        <a href="javascript:void(0)" onclick="StoreInit._goHome()">الرئيسية</a>
-        <i class="fa fa-chevron-left"></i>
-        <a href="javascript:void(0)" onclick="StoreInit._filterByCategory('all')">كل المنتجات</a>
-        <i class="fa fa-chevron-left"></i>
-        <a href="javascript:void(0)" onclick="StoreInit._filterByCategory('${currentCat.id}')">${currentCat.name}</a>
-        <i class="fa fa-chevron-left"></i>
-        <span class="current">${product.name}</span>
-      </nav>
       <div class="product-detail-view">
         <div class="product-main-info">
           <div class="product-media">
@@ -415,6 +406,15 @@ window.StoreInit = {
             ${galleryHTML}
           </div>
           <div class="product-details">
+            <div class="breadcrumb" style="margin-bottom:15px; font-size:12px; opacity:0.6; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <a href="javascript:void(0)" onclick="StoreInit._goHome()" style="color:inherit; text-decoration:none;">الرئيسية</a>
+              <i class="fa fa-chevron-left" style="font-size:9px;"></i>
+              <a href="javascript:void(0)" onclick="StoreInit._filterByCategory('all')" style="color:inherit; text-decoration:none;">كل المنتجات</a>
+              <i class="fa fa-chevron-left" style="font-size:9px;"></i>
+              <a href="javascript:void(0)" onclick="StoreInit._filterByCategory('${currentCat.id}')" style="color:inherit; text-decoration:none;">${currentCat.name}</a>
+              <i class="fa fa-chevron-left" style="font-size:9px;"></i>
+              <span style="font-weight:bold; color:var(--text);">${product.name}</span>
+            </div>
             <h1 class="product-title">${product.name}</h1>
             <div class="product-price-large">
               ${isComingSoon ? `
