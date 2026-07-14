@@ -134,7 +134,11 @@
                     keywords.some(kw => varObj.name.includes(kw) || varObj.name.toLowerCase().includes(kw))
                 );
                 if (!v || !v.values) return false;
-                const valObj = v.values.find(vo => (typeof vo === 'object' ? vo.value : vo) === val);
+                
+                const rawValues = Array.isArray(v.values) ? v.values : (typeof v.values === 'string' ? (v.values.includes(',') ? v.values.split(',') : [v.values]) : []);
+                const values = rawValues.map(item => typeof item === 'object' && item !== null ? item : { value: item });
+                
+                const valObj = values.find(vo => (vo.value || '').trim() === val.trim());
                 return valObj && valObj.stock !== undefined && valObj.stock !== '' && parseInt(valObj.stock) === 0;
             };
 
