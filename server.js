@@ -74,6 +74,13 @@ app.post('/api/notify-order', auth, async (req, res) => {
       notification: {
         title: 'طلب جديد وارد! \uD83D\uDED2',
         body: `طلب رقم ${orderId} بقيمة ${total || '?'} \u20AA من ${customerName || 'عميل'}`,
+        sound: 'mane',
+      },
+      android: {
+        notification: {
+          sound: 'mane',
+          channelId: 'orders_channel_v2', // unique channel to force sound binding
+        }
       },
       data: {
         orderId: String(orderId),
