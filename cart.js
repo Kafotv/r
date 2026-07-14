@@ -105,7 +105,7 @@ function addToCart(id, name, price, image, color, size) {
         }
     }
     let cart = getCart();
-    let existingItem = cart.find(item => item.id === id && item.color === color && item.size === size);
+    let existingItem = cart.find(item => item.id === id && item.name === name && item.color === color && item.size === size);
     
     if (existingItem) {
         existingItem.quantity += 1;
@@ -282,7 +282,7 @@ window.cart = {
         const size = item.size || undefined;
         const qty = parseInt(item.quantity) || 1;
         let cart = getCart();
-        const existing = cart.find(i => i.id === id && i.color === color && i.size === size);
+        const existing = cart.find(i => i.id === id && i.name === item.name && i.color === color && i.size === size);
         if (existing) {
             existing.quantity += qty;
         } else {
