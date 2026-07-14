@@ -126,6 +126,18 @@
                 openModal('cartModal');
                 return;
             }
+
+            const product = (window.StoreInit && StoreInit.products) ? StoreInit.products.find(p => String(p.id) === String(id)) : null;
+            const isOutOfStockVal = (keywords, val) => {
+                if (!product || !product.variants) return false;
+                const v = product.variants.find(varObj => 
+                    keywords.some(kw => varObj.name.includes(kw) || varObj.name.toLowerCase().includes(kw))
+                );
+                if (!v || !v.values) return false;
+                const valObj = v.values.find(vo => (typeof vo === 'object' ? vo.value : vo) === val);
+                return valObj && valObj.stock !== undefined && valObj.stock !== '' && parseInt(valObj.stock) === 0;
+            };
+
             let html = `<div style="text-align:center; margin-bottom:20px;">
                 <img src="${image}" style="width:100px; height:100px; border-radius:10px; object-fit:cover; margin-bottom:10px;">
                 <h4 style="font-weight:800;">${name}</h4>
@@ -135,7 +147,10 @@
                 html += `<div class="qa-option-group" style="margin-bottom:20px;">
                     <label style="display:block; font-weight:800; font-size:12px; margin-bottom:10px;">اختر اللون:</label>
                     <div style="display:flex; gap:10px; flex-wrap:wrap;" id="qaColors">
-                        ${colors.map(c => `<span class="option-pill" onclick="selectQAPill(this)" data-val="${c}">${c}</span>`).join('')}
+                        ${colors.map(c => {
+                            const oos = isOutOfStockVal(['اللون', 'color'], c);
+                            return `<span class="option-pill ${oos ? 'out-of-stock' : ''}" ${oos ? 'style="opacity:0.4; cursor:not-allowed;"' : 'onclick="selectQAPill(this)"'} data-val="${c}">${c}${oos ? ' ✕' : ''}</span>`;
+                        }).join('')}
                     </div>
                     <div class="qa-error-msg" style="color:#ef4444; font-size:10px; font-weight:700; margin-top:5px; display:none;">يرجى اختيار اللون</div>
                 </div>`;
@@ -144,7 +159,10 @@
                 html += `<div class="qa-option-group" style="margin-bottom:25px;">
                     <label style="display:block; font-weight:800; font-size:12px; margin-bottom:10px;">اختر المقاس:</label>
                     <div style="display:flex; gap:10px; flex-wrap:wrap;" id="qaSizes">
-                        ${sizes.map(s => `<span class="option-pill" onclick="selectQAPill(this)" data-val="${s}">${s}</span>`).join('')}
+                        ${sizes.map(s => {
+                            const oos = isOutOfStockVal(['المقاس', 'size', 'الحجم'], s);
+                            return `<span class="option-pill ${oos ? 'out-of-stock' : ''}" ${oos ? 'style="opacity:0.4; cursor:not-allowed;"' : 'onclick="selectQAPill(this)"'} data-val="${s}">${s}${oos ? ' ✕' : ''}</span>`;
+                        }).join('')}
                     </div>
                     <div class="qa-error-msg" style="color:#ef4444; font-size:10px; font-weight:700; margin-top:5px; display:none;">يرجى اختيار المقاس</div>
                 </div>`;
