@@ -40,10 +40,12 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // If dashboard is already open, focus it and trigger sound
+      // If dashboard or mobile-admin is already open, focus it and switch to Orders page
       for (const client of clientList) {
-        if (client.url.includes('account=dashboard') && 'focus' in client) {
+        const isMatch = client.url.includes('account=dashboard') || client.url.includes('mobile-admin') || client.url.includes('index.html');
+        if (isMatch && 'focus' in client) {
           client.focus();
+          client.postMessage({ type: 'SWITCH_PAGE', page: 'Orders' });
           client.postMessage({ type: 'PLAY_ORDER_SOUND' });
           return;
         }

@@ -1289,6 +1289,14 @@ window.addEventListener('hashchange', () => {
   if (['Dashboard','Orders','Products','Distributors','Settings'].includes(hashPage) && hashPage !== state.currentPage) switchPage(hashPage);
 });
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SWITCH_PAGE') {
+      switchPage(event.data.page);
+    }
+  });
+}
+
 // ─── FCM Admin Token Registration ───────────────────────────────────────
 async function initAdminFCM() {
   try {
@@ -1318,8 +1326,12 @@ async function initAdminFCM() {
           
           window.FirebasePlugin.onMessageReceived((message) => {
             console.log('Native message received:', message);
-            // Show alert or play sound in foreground if desired
-            showToast('طلب جديد وارد! 💰', 'success');
+            if (message.tap) {
+              switchPage('Orders');
+            } else {
+              showToast('طلب جديد وارد! 💰', 'success');
+              playNotifSound('order');
+            }
           }, (err) => {
             console.error('Failed to register message handler:', err);
           });
