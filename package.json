@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.2",
+    "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "firebase-admin": "^13.10.0"
   }

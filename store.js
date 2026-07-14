@@ -646,6 +646,19 @@
                     if (couponCode) {
                         DB.incrementCouponUsage(couponCode).catch(() => {});
                     }
+                    // Fire-and-forget: notify admins via push
+                    const pushUrl = CONFIG.PUSH_SERVER_URL;
+                    if (pushUrl) {
+                      fetch(pushUrl + '/api/notify-order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          orderId: result,
+                          total: finalTotalVal,
+                          customerName: document.getElementById('custName')?.value || '',
+                        }),
+                      }).catch(() => {}); // silently fail
+                    }
                     playSuccessSound();
                     launchConfetti();
                     if (typeof window.trackStoreEvent === 'function') {
@@ -1381,12 +1394,12 @@
         try {
             if (typeof firebase === 'undefined') return;
             const firebaseConfig = {
-                apiKey: "AIzaSyBw9zs-QKCGHpWOqlCfOdGR44S1kIPbE5o",
-                authDomain: "ulpro-102d3.firebaseapp.com",
-                projectId: "ulpro-102d3",
-                storageBucket: "ulpro-102d3.firebasestorage.app",
-                messagingSenderId: "943893735072",
-                appId: "1:943893735072:web:e467211472030ea3418bc5"
+                apiKey: "AIzaSyBpBVstbuy7-QWX2ZZXWInPrD4UUwG_JgY",
+                authDomain: "jomla-d4b6d.firebaseapp.com",
+                projectId: "jomla-d4b6d",
+                storageBucket: "jomla-d4b6d.firebasestorage.app",
+                messagingSenderId: "52673843388",
+                appId: "1:52673843388:web:29ac3a7a964045eef8c0b9"
             };
             if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
             const messaging = firebase.messaging();

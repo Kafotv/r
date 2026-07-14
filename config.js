@@ -17,6 +17,9 @@ const CONFIG = {
   CURRENCY: '₪',
   MAIN_COLOR: '#fa0000',
 
+  // Push notification server (set this after deploying server.js)
+  PUSH_SERVER_URL: '', // e.g. 'https://your-app.onrender.com'
+
   // Admin credentials are stored securely in Supabase settings table
   // Do NOT add passwords here — this file is public!
 };
