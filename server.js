@@ -19,7 +19,14 @@ let serviceAccount;
 try {
   serviceAccount = require('./data/firebase-service-account.json');
 } catch (_) {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
+    try {
+      const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8');
+      serviceAccount = JSON.parse(decoded);
+    } catch (err) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_B64:', err);
+    }
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   }
 }
