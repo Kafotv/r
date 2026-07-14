@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>إدارة المتجر</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- ══ Product Editor Page ══ -->
+<div class="page" id="pageProductEditor">
+  <div class="editor-header">
+    <button onclick="closeProductEditor()"><i class="fas fa-arrow-right"></i></button>
+    <h3 id="editorTitle">إضافة منتج</h3>
+    <button id="editorDeleteBtn" onclick="deleteProductEditor()" style="display:none;color:var(--danger)"><i class="fas fa-trash"></i></button>
+  </div>
+  <div class="editor-body">
+    <div class="editor-section">
+      <div class="editor-img-upload" id="editorImagePreview" onclick="document.getElementById('editorFileInput').click()">
+        <i class="fas fa-camera"></i>
+        <span>اضغط لرفع صورة</span>
+      </div>
+      <input type="file" id="editorFileInput" accept="image/*" style="display:none">
+      <div class="field"><label>رابط الصورة (اختياري)</label><input type="url" id="editProdImage" placeholder="https://..." oninput="syncImagePreview()"></div>
+    </div>
+    <div class="editor-section">
+      <label style="display:block;margin-bottom:8px;font-size:13px;color:var(--text);font-weight:600">صور إضافية (معرض)</label>
+      <div id="editorGallery" class="editor-gallery"></div>
+      <div class="gallery-add">
+        <input type="url" id="editProdExtraImage" placeholder="رابط صورة إضافية" style="flex:1">
+        <button type="button" class="mini-btn" onclick="addExtraImage()"><i class="fas fa-plus"></i></button>
+        <button type="button" class="mini-btn" onclick="document.getElementById('editorGalleryFileInput').click()"><i class="fas fa-camera"></i></button>
+        <input type="file" id="editorGalleryFileInput" accept="image/*" style="display:none">
+      </div>
+    </div>
+      <div class="editor-section">
+        <div class="field"><label>رابط الفيديو (اختياري)</label><input type="url" id="editProdVideo" placeholder="https://...mp4 أو رابط يوتيوب" oninput="syncVideoPreview()"></div>
+        <div id="editProdVideoPreview" class="video-preview" style="display:none"></div>
+      </div>
+    <div class="editor-section">
+      <div class="field"><label>اسم المنتج *</label><input type="text" id="editProdName" placeholder="اسم المنتج"></div>
+      <div class="field"><label>التصنيف</label>
+        <select id="editProdCategory"><option value="">بدون تصنيف</option></select>
+      </div>
+    </div>
+    <div class="editor-section">
+      <div class="field-row">
+        <div class="field"><label>السعر *</label><input type="number" id="editProdPrice" placeholder="0.00" step="0.01"></div>
+        <div class="field"><label>سعر البيع</label><input type="number" id="editProdSale" placeholder="0.00" step="0.01"></div>
+      </div>
+      <div class="field"><label>سعر الجملة</label><input type="number" id="editProdWholesale" placeholder="0.00" step="0.01"></div>
+    </div>
+    <div class="editor-section">
+      <div class="field-row">
+        <div class="field"><label>نوع المخزون</label>
+          <select id="editProdStockType" onchange="toggleEditorStock()">
+            <option value="unlimited">غير محدود</option>
+            <option value="limited">محدود</option>
+            <option value="out">نفدت الكمية</option>
+          </select>
+        </div>
+        <div class="field" id="editorStockQtyField" style="display:none"><label>الكمية</label><input type="number" id="editProdStockQty" placeholder="0" min="0"></div>
+      </div>
+      <div class="field"><label>الوصف</label><textarea id="editProdDesc" rows="3" placeholder="وصف المنتج (اختياري)"></textarea></div>
+    </div>
+    <button class="editor-save-btn" onclick="saveProductEditor()"><i class="fas fa-save"></i> حفظ المنتج</button>
+  </div>
+</div>
+
+<!-- ══ Order Viewer Page ══ -->
+<div class="page" id="pageOrderViewer">
+  <div class="editor-header">
+    <button onclick="closeOrderViewer()"><i class="fas fa-arrow-right"></i></button>
+    <h3 id="orderViewerTitle">تفاصيل الطلب</h3>
+    <button id="orderViewerDelete" onclick="deleteOrderFromViewer()" style="display:none;color:var(--danger)"><i class="fas fa-trash"></i></button>
+  </div>
+  <div class="editor-body" id="orderViewerBody">
+    <div class="loading"><i class="fas fa-spinner"></i></div>
+  </div>
+</div>
+
+<!-- ══ Distributor Viewer Page ══ -->
+<div class="page" id="pageDistributorViewer">
+  <div class="editor-header">
+    <button onclick="closeDistributorViewer()"><i class="fas fa-arrow-right"></i></button>
+    <h3 id="distViewerTitle">الموزع</h3>
+  </div>
+  <div class="editor-body" id="distViewerBody">
+    <div class="loading"><i class="fas fa-spinner"></i></div>
+  </div>
+</div>
+
+<!-- ══ Category Editor Page ══ -->
+<div class="page" id="pageCategoryEditor">
+  <div class="editor-header">
+    <button onclick="closeCategoryEditor()"><i class="fas fa-arrow-right"></i></button>
+    <h3 id="catEditorTitle">إضافة تصنيف</h3>
+    <button id="catEditorDelete" onclick="deleteCategoryEditor()" style="display:none;color:var(--danger)"><i class="fas fa-trash"></i></button>
+  </div>
+  <div class="editor-body">
+    <div class="editor-section">
+      <div class="field"><label>اسم التصنيف *</label><input type="text" id="catEditName" placeholder="اسم التصنيف"></div>
+    </div>
+    <div class="editor-section">
+      <div class="editor-img-upload" id="catImagePreview" onclick="document.getElementById('catFileInput').click()">
+        <i class="fas fa-image"></i>
+        <span>صورة التصنيف</span>
+        <input type="file" id="catFileInput" accept="image/*" style="display:none">
+      </div>
+      <div class="field"><label>رابط الصورة (اختياري)</label><input type="url" id="catEditImage" placeholder="https://..." oninput="syncCatImagePreview()"></div>
+    </div>
+    <div class="editor-section">
+      <div class="field"><label>أيقونة</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="catEditIcon" placeholder="مثال: fa-star" oninput="previewCatIcon()" style="flex:1">
+          <div id="catIconPreview" onclick="openIconPicker()" style="width:40px;height:40px;border-radius:8px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--primary);flex-shrink:0;cursor:pointer"><i class="fas fa-icons"></i></div>
+        </div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:3px">اضغط على الأيقونة لاختيار من القائمة</div>
+      </div>
+    </div>
+    <button class="editor-save-btn" onclick="saveCategoryEditor()"><i class="fas fa-save"></i> حفظ التصنيف</button>
+  </div>
+</div>
+
+<div id="authScreen">
+  <div class="logo"><i class="fas fa-store"></i></div>
+  <h1>إدارة المتجر</h1>
+  <p>تطبيق إدارة ومراقبة المتجر</p>
+  <div class="auth-card">
+    <div id="loginForm">
+      <div id="adminSetup" style="display:none;margin-bottom:16px;padding:12px;background:#fef2f2;border-radius:10px;border:1px solid #fecaca;font-size:13px;color:#991b1b;text-align:right;">
+        <div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-shield-alt"></i> إعداد المدير لأول مرة</div>
+        <p style="font-size:12px;line-height:1.6;margin-bottom:10px;">لم يتم العثور على بيانات المدير. أدخل رقم هاتف وكلمة مرور جديدة.</p>
+        <div style="margin-bottom:10px;"><input type="tel" id="setupPhone" placeholder="رقم هاتف المدير" style="width:100%;padding:10px 12px;border:2px solid var(--gray-200);border-radius:8px;font-size:13px;"></div>
+        <div style="margin-bottom:10px;"><form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><input type="password" id="setupPass" placeholder="كلمة المرور" autocomplete="new-password" style="width:100%;padding:10px 12px;border:2px solid var(--gray-200);border-radius:8px;font-size:13px;"></form></div>
+        <button onclick="saveAdminSetup()" style="width:100%;padding:10px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;"><i class="fas fa-save"></i> حفظ الدخول</button>
+      </div>
+      <div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="loginPhone" placeholder="رقم الهاتف" inputmode="numeric"></div>
+      <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><div class="input-group"><i class="fas fa-lock"></i><input type="password" id="loginPassword" placeholder="كلمة المرور" autocomplete="new-password"></div></form>
+      <button class="login-btn" onclick="handleLogin()"><i class="fas fa-sign-in-alt"></i> تسجيل الدخول</button>
+      <div class="error-msg" id="loginError"></div>
+      <div class="toggle-auth"><a onclick="showRegisterForm()">حساب جديد؟ سجل كموزع</a></div>
+    </div>
+    <div id="registerForm" style="display:none">
+      <div class="input-group"><i class="fas fa-user"></i><input type="text" id="regName" placeholder="الاسم الكامل *"></div>
+      <div class="input-group"><i class="fas fa-phone"></i><input type="tel" id="regPhone" placeholder="رقم الهاتف *"></div>
+      <form onsubmit="return false" style="margin:0;padding:0;border:none;background:none;"><div class="input-group"><i class="fas fa-lock"></i><input type="password" id="regPassword" placeholder="كلمة المرور *" autocomplete="new-password"></div></form>
+      <div class="input-group"><i class="fas fa-city"></i><input type="text" id="regCity" placeholder="المدينة *"></div>
+      <div class="input-group"><i class="fas fa-map-marker-alt"></i><input type="text" id="regAddress" placeholder="العنوان *"></div>
+      <button class="login-btn" onclick="handleRegister()"><i class="fas fa-user-plus"></i> تسجيل</button>
+      <div class="error-msg" id="regError"></div>
+      <div class="toggle-auth"><a onclick="showLoginForm()">لديك حساب؟ تسجيل الدخول</a></div>
+    </div>
+  </div>
+</div>
+
+<div id="appShell">
+  <div class="app-header">
+    <div class="header-title"><i class="fas fa-store"></i> <span id="headerTitle">الإحصائيات</span></div>
+    <div class="header-actions">
+      <button onclick="toggleNotifPanel()" id="notifBtn"><i class="fas fa-bell"></i><span class="notif-dot" id="notifDot"></span></button>
+    </div>
+  </div>
+
+  <div class="app-content" id="appContent">
+    <div class="page active" id="pageDashboard">
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-icon" style="background:#fef2f2;color:var(--danger)"><i class="fas fa-shopping-cart"></i></div><div class="stat-value" id="statOrders">-</div><div class="stat-label">طلبات اليوم</div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fef3c7;color:var(--warning)"><i class="fas fa-hourglass-half"></i></div><div class="stat-value" id="statPending">-</div><div class="stat-label">قيد الانتظار</div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#d1fae5;color:var(--success)"><i class="fas fa-dollar-sign"></i></div><div class="stat-value" id="statRevenue">-</div><div class="stat-label">إيرادات اليوم</div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#dbeafe;color:var(--info)"><i class="fas fa-users"></i></div><div class="stat-value" id="statDistRequests">-</div><div class="stat-label">طلبات انضمام</div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#ede9fe;color:#7c3aed"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="statWeekRevenue">-</div><div class="stat-label">إيرادات الأسبوع</div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#cffafe;color:#0891b2"><i class="fas fa-calendar-alt"></i></div><div class="stat-value" id="statMonthRevenue">-</div><div class="stat-label">إيرادات الشهر</div></div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-head">
+          <h3><i class="fas fa-chart-line"></i> تحليلات الإيرادات</h3>
+          <div class="date-filter">
+            <input type="date" id="revFrom">
+            <span class="df-arrow">→</span>
+            <input type="date" id="revTo">
+            <button class="df-btn" onclick="applyRevFilter()">تطبيق</button>
+            <button class="df-btn df-reset" onclick="clearRevFilter()">الكل</button>
+          </div>
+        </div>
+        <div class="analytics-totals">
+          <div class="at-box"><span class="at-label">إيرادات الفترة</span><span class="at-value" id="revPeriodTotal">-</span></div>
+          <div class="at-box"><span class="at-label">الإجمالي (كل الوقت)</span><span class="at-value" id="revAllTime">-</span></div>
+        </div>
+        <div class="chart" id="revChart"></div>
+        <div class="top-products">
+          <h4><i class="fas fa-trophy"></i> الأكثر مبيعًا</h4>
+          <div id="topProducts"><div class="empty-state" style="padding:10px">لا توجد مبيعات</div></div>
+        </div>
+      </div>
+      <div class="section-title"><i class="fas fa-clock" style="color:var(--gray-400)"></i> آخر الطلبات</div>
+      <div id="recentOrders">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="pageOrders">
+      <div class="orders-filter" id="ordersFilter">
+        <button class="filter-btn active" data-filter="all">الكل</button>
+        <button class="filter-btn" data-filter="pending">قيد الانتظار</button>
+        <button class="filter-btn" data-filter="processing">قيد التجهيز</button>
+        <button class="filter-btn" data-filter="shipped">تم الشحن</button>
+        <button class="filter-btn" data-filter="delivered">تم التوصيل</button>
+        <button class="filter-btn" data-filter="cancelled">ملغي</button>
+      </div>
+      <div id="ordersList">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="pageProducts">
+      <div class="dist-tabs">
+        <button class="dist-tab active" onclick="switchProdTab('products')"><i class="fas fa-box"></i> المخزون</button>
+        <button class="dist-tab" onclick="switchProdTab('categories')"><i class="fas fa-tags"></i> التصنيفات</button>
+      </div>
+      <div id="prodContent">
+        <div id="prodProductsTab">
+          <div class="prod-header">
+            <div class="section-title" style="margin:0"><i class="fas fa-box" style="color:var(--gray-400)"></i> المخزون</div>
+            <button class="add-prod-btn" onclick="showAddProductForm()"><i class="fas fa-plus"></i> إضافة</button>
+          </div>
+          <div class="search-bar"><input type="text" id="prodSearch" placeholder="بحث عن منتج..." oninput="loadProducts()"></div>
+          <div id="productsList">
+            <div class="skeleton-product-grid">
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+              <div class="skeleton-product-card"><div class="skeleton img"></div><div class="content"><div class="skeleton line-title"></div><div class="skeleton line-price"></div><div class="skeleton line-stock"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <div id="prodCategoriesTab" style="display:none">
+          <div class="prod-header">
+            <div class="section-title" style="margin:0"><i class="fas fa-tags" style="color:var(--gray-400)"></i> التصنيفات</div>
+            <button class="add-prod-btn" onclick="showAddCategoryForm()"><i class="fas fa-plus"></i> إضافة</button>
+          </div>
+          <div id="categoriesList"><div class="loading"><i class="fas fa-spinner"></i></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="pageDistributors">
+      <div class="dist-tabs">
+        <button class="dist-tab active" onclick="switchDistTab('pending')"><i class="fas fa-user-clock"></i> طلبات الانضمام</button>
+        <button class="dist-tab" onclick="switchDistTab('approved')"><i class="fas fa-users"></i> الموزعين</button>
+      </div>
+      <div id="distContent">
+        <div class="skeleton-orders-list">
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+          <div class="skeleton-order-card"><div class="skeleton avatar"></div><div class="content"><div class="skeleton line-sm"></div><div class="skeleton line-md"></div><div class="skeleton line-lg"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="pageSettings">
+      <div class="settings-row" onclick="toggleDarkMode()"><div class="right"><i style="background:var(--gray-600)" id="darkModeIcon" class="fas fa-moon"></i><div><div class="label">الوضع الليلي</div><div class="sub">تبديل بين الوضع النهاري والليلي</div></div></div><i class="fas fa-chevron-left arrow" id="darkModeCheck" style="color:var(--gray-400)">○</i></div>
+      <div class="settings-row" onclick="refreshAll()"><div class="right"><i style="background:var(--info)" class="fas fa-sync-alt"></i><div><div class="label">تحديث البيانات</div><div class="sub">سحب آخر البيانات من الخادم</div></div></div><i class="fas fa-chevron-left arrow"></i></div>
+      <div class="settings-row" onclick="testNotification()"><div class="right"><i style="background:var(--success)" class="fas fa-bell"></i><div><div class="label">اختبار الإشعارات</div><div class="sub">تجربة صوت وشكل الإشعار</div></div></div><i class="fas fa-chevron-left arrow"></i></div>
+      <div class="settings-row" onclick="notifSound()"><div class="right"><i style="background:var(--warning)" class="fas fa-music"></i><div><div class="label">صوت الإشعارات</div><div class="sub" id="notifSoundLabel">مفعل</div></div></div><i class="fas fa-chevron-left arrow"></i></div>
+      <div class="settings-row" onclick="openNotifSounds()"><div class="right"><i style="background:#7c3aed" class="fas fa-bell"></i><div><div class="label">أصوات التنبيهات</div><div class="sub">اختيار نغمة لكل نوع إشعار</div></div></div><i class="fas fa-chevron-left arrow"></i></div>
+      <div class="settings-row" onclick="logout()"><div class="right"><i style="background:var(--danger)" class="fas fa-sign-out-alt"></i><div><div class="label">تسجيل الخروج</div><div class="sub">العودة لشاشة الدخول</div></div></div><i class="fas fa-chevron-left arrow"></i></div>
+      <div style="text-align:center;margin-top:24px;font-size:11px;color:var(--gray-400)">الإصدار 1.0</div>
+    </div>
+
+    <div class="page" id="pageNotifSounds">
+      <div class="editor-header">
+        <button onclick="switchPage('Settings')"><i class="fas fa-arrow-right"></i></button>
+        <h3>أصوات التنبيهات</h3>
+        <button style="visibility:hidden"><i class="fas fa-arrow-right"></i></button>
+      </div>
+      <div class="editor-body">
+        <div class="sounds-global">
+          <span>الصوت العام</span>
+          <label class="switch"><input type="checkbox" id="soundsGlobalToggle" onchange="toggleNotifSoundGlobal()"><span class="slider"></span></label>
+        </div>
+        <div id="soundsList"></div>
+        <div class="sounds-note"><i class="fas fa-info-circle"></i> اختر نغمة مختلفة لكل نوع إشعار، واضغط زر التشغيل للاستماع.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-tabs">
+    <button class="tab active" data-page="Dashboard" onclick="switchPage('Dashboard')"><i class="fas fa-chart-pie"></i><span>الإحصائيات</span></button>
+    <button class="tab" data-page="Orders" onclick="switchPage('Orders')"><i class="fas fa-shopping-cart"></i><span>المبيعات</span></button>
+    <button class="tab" data-page="Products" onclick="switchPage('Products')"><i class="fas fa-box"></i><span>المخزون</span></button>
+    <button class="tab" data-page="Distributors" onclick="switchPage('Distributors')"><i class="fas fa-users"></i><span>الموزعين</span></button>
+    <button class="tab" data-page="Settings" onclick="switchPage('Settings')"><i class="fas fa-cog"></i><span>الإعدادات</span></button>
+  </div>
+</div>
+
+<div id="notifPanel" onclick="if(event.target===this) toggleNotifPanel()">
+  <div class="panel-content">
+    <div class="panel-header"><h3><i class="fas fa-bell" style="color:var(--primary)"></i> الإشعارات</h3><div><button onclick="clearAllNotifs()" id="clearNotifBtn" title="مسح الكل" style="display:none" class="clear-notif-btn"><i class="fas fa-trash"></i> مسح الكل</button><button onclick="toggleNotifPanel()" style="margin-right:4px"><i class="fas fa-times"></i></button></div></div>
+    <div class="orders-filter" id="notifFilter" style="margin-bottom:12px">
+      <button class="filter-btn active" data-ntype="all" onclick="switchNotifFilter('all')">الكل</button>
+      <button class="filter-btn" data-ntype="order" onclick="switchNotifFilter('order')">طلبات</button>
+      <button class="filter-btn" data-ntype="distributor" onclick="switchNotifFilter('distributor')">موزعين</button>
+    </div>
+    <div id="notifList"><div class="empty-state"><i class="fas fa-bell-slash"></i><p>لا توجد إشعارات</p></div></div>
+  </div>
+</div>
+
+<div id="iconPickerPanel" onclick="if(event.target===this) closeIconPicker()">
+  <div class="panel-content">
+    <div class="panel-header"><h3><i class="fas fa-icons" style="color:var(--primary)"></i> اختر أيقونة</h3><button onclick="closeIconPicker()"><i class="fas fa-times"></i></button></div>
+    <div class="icon-grid" id="iconGrid"></div>
+  </div>
+</div>
+
+<div id="confirmModal" onclick="if(event.target===this) window._confirmResolve&&window._confirmResolve(false)">
+  <div class="confirm-box">
+    <div class="confirm-icon"><i class="fas fa-exclamation-triangle"></i></div>
+    <div class="confirm-text" id="confirmText">هل أنت متأكد؟</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-no" onclick="window._confirmResolve&&window._confirmResolve(false)">إلغاء</button>
+      <button class="confirm-btn confirm-yes" onclick="window._confirmResolve&&window._confirmResolve(true)">نعم، متأكد</button>
+    </div>
+  </div>
+</div>
+
+    <!-- Firebase SDK for Push Notifications -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="cordova.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.jomla.admin" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>JomlaAdmin</name>
+    <description>
+        A sample Apache Cordova application that responds to the deviceready event.
+    </description>
+    <author email="dev@cordova.apache.org" href="https://cordova.apache.org">
+        Apache Cordova Team
+    </author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-navigation href="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+
+    <!-- Splash Screen Preferences -->
+    <preference name="AutoHideSplashScreen" value="true" />
+    <preference name="SplashScreenDelay" value="3000" />
+
+    <!-- App Icon -->
+    <icon src="res/icon.png" />
+
+    <platform name="android">
+        <icon src="res/icon.png" />
+        <icon background="res/background.png" density="ldpi" foreground="res/icon.png" />
+        <icon background="res/background.png" density="mdpi" foreground="res/icon.png" />
+        <icon background="res/background.png" density="hdpi" foreground="res/icon.png" />
+        <icon background="res/background.png" density="xhdpi" foreground="res/icon.png" />
+        <icon background="res/background.png" density="xxhdpi" foreground="res/icon.png" />
+        <icon background="res/background.png" density="xxxhdpi" foreground="res/icon.png" />
+        <!-- Android 12+ Splash Screen configurations -->
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
+        <preference name="AndroidWindowSplashScreenBackground" value="#FF2D2D" />
+        
+        <!-- Custom Notification Sound resource file -->
+        <resource-file src="www/audio/mane.mp3" target="app/src/main/res/raw/mane.mp3" />
+    </platform>
+</widget>
