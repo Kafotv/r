@@ -1292,6 +1292,36 @@ window.addEventListener('hashchange', () => {
 // ─── FCM Admin Token Registration ───────────────────────────────────────
 async function initAdminFCM() {
   try {
+    // 1. If running inside Cordova app:
+    if (window.cordova && window.FirebasePlugin) {
+      console.log('📱 Cordova environment detected. Initializing native FCM...');
+      
+      window.FirebasePlugin.grantPermission(async (hasPermission) => {
+        if (hasPermission) {
+          window.FirebasePlugin.getToken(async (token) => {
+            if (token) {
+              await DB.registerFCMToken(token, 'admin');
+              console.log('✅ Native Admin FCM Token Registered:', token.slice(0, 20) + '...');
+            }
+          }, (err) => {
+            console.error('Failed to get native FCM token:', err);
+          });
+          
+          window.FirebasePlugin.onMessageReceived((message) => {
+            console.log('Native message received:', message);
+            // Show alert or play sound in foreground if desired
+            showToast('طلب جديد وارد! 💰', 'success');
+          }, (err) => {
+            console.error('Failed to register message handler:', err);
+          });
+        } else {
+          console.warn('Native push notification permission denied');
+        }
+      });
+      return;
+    }
+
+    // 2. Fallback for standard Web browser environment:
     if (typeof firebase === 'undefined') return;
 
     const firebaseConfig = {
