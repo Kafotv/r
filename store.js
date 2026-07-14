@@ -1278,10 +1278,10 @@
                             });
                         }
                         window.wholesalePrices = pricesMap;
-                        if (typeof StoreInit._applyWholesaleToDetail === 'function') StoreInit._applyWholesaleToDetail();
                     }
                 }
-                 if (pricesMap && Object.keys(pricesMap).length > 0) {
+                if (typeof StoreInit._applyWholesaleToDetail === 'function') StoreInit._applyWholesaleToDetail();
+                if (pricesMap && Object.keys(pricesMap).length > 0) {
                     const priceEls = document.querySelectorAll('.product-price .current-price');
                     priceEls.forEach(el => {
                         const card = el.closest('.product-card');

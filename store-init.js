@@ -268,18 +268,22 @@ window.StoreInit = {
 
   _applyWholesaleToDetail() {
     const pid = this._currentDetailProductId;
+    console.log('🔍 _applyWholesaleToDetail pid:', pid, 'wholesalePrices:', window.wholesalePrices ? Object.keys(window.wholesalePrices).length : 'null');
     if (!pid || !window.wholesalePrices) return;
     const wp = window.wholesalePrices[pid];
+    console.log('🔍 _applyWholesaleToDetail wp for product:', wp);
     if (!wp || parseFloat(wp) <= 0) return;
     const product = this.products.find(p => String(p.id) === String(pid));
-    if (!product) return;
+    if (!product) { console.log('🔍 _applyWholesaleToDetail product not found'); return; }
     const currency = this.settings.currency || '₪';
     const promoPrice = this._getPromoPrice(product);
     const hasPromo = promoPrice !== null && promoPrice < parseFloat(product.price);
     const originalPrice = hasPromo ? parseFloat(product.price) : parseFloat(product.price);
     const c = document.querySelector('.product-price-large');
+    console.log('🔍 _applyWholesaleToDetail priceEl:', c, 'has-fa-tags:', c?.querySelector('.fa-tags'));
     if (c && !c.querySelector('.fa-tags')) {
       this._applyPriceToDetail(currency, originalPrice, parseFloat(wp));
+      console.log('🔍 _applyWholesaleToDetail APPLIED');
     }
   },
 
@@ -308,19 +312,24 @@ window.StoreInit = {
     const isDistributor = isAdmin || (distPhone && distId);
     let wholesalePrice = null;
     if (isDistributor) {
+      console.log('🔍 _showProductDetail isDistributor, window.wholesalePrices:', !!window.wholesalePrices, 'product.wholesalePrice:', product.wholesalePrice);
       if (window.wholesalePrices && window.wholesalePrices[product.id]) {
         wholesalePrice = parseFloat(window.wholesalePrices[product.id]);
+        console.log('🔍 _showProductDetail using window.wholesalePrices:', wholesalePrice);
       } else if (product.wholesalePrice && parseFloat(product.wholesalePrice) > 0) {
         wholesalePrice = parseFloat(product.wholesalePrice);
+        console.log('🔍 _showProductDetail using product.wholesalePrice:', wholesalePrice);
       }
     }
     if (!wholesalePrice && isDistributor) {
+      console.log('🔍 _showProductDetail falling back to direct DB query');
       DB.supabase.from('products').select('wholesale_price').eq('id', String(product.id)).single().then(({ data, error }) => {
+        console.log('🔍 _showProductDetail DB fallback result:', data, error);
         if (!error && data && data.wholesale_price !== null && parseFloat(data.wholesale_price) > 0) {
           const wp = parseFloat(data.wholesale_price);
           this._applyPriceToDetail(currency, displayPrice, wp);
         }
-      }).catch(() => {});
+      }).catch((e) => console.error('🔍 _showProductDetail DB fallback error:', e));
     }
     if (wholesalePrice) {
       displayOriginal = displayPrice;
@@ -328,7 +337,8 @@ window.StoreInit = {
     }
     // Safety net: re-check wholesalePrices after they may have loaded
     if (isDistributor && !wholesalePrice) {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        console.log('🔍 _showProductDetail safety net: window.wholesalePrices:', !!window.wholesalePrices, 'prices[product.id]:', window.wholesalePrices?.[product.id]);
         if (window.wholesalePrices && window.wholesalePrices[product.id]) {
           const wp = parseFloat(window.wholesalePrices[product.id]);
           if (wp > 0) this._applyPriceToDetail(currency, displayPrice, wp);
