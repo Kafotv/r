@@ -198,13 +198,28 @@
             const cart = getCart();
             const container = document.getElementById('cartModalItems');
             if (!container) return;
+
+            // Reset steps to the first step and enable submit button
+            const stepItems = document.getElementById('cartStepItems');
+            const stepCheckout = document.getElementById('cartStepCheckout');
+            const stepPayment = document.getElementById('cartStepPayment');
+            if (stepItems) stepItems.style.display = 'block';
+            if (stepCheckout) stepCheckout.style.display = 'none';
+            if (stepPayment) stepPayment.style.display = 'none';
+
+            const cartModal = document.getElementById('cartModal');
+            if (cartModal) {
+                const submitBtn = cartModal.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'تأكيد الطلب النهائي';
+                }
+            }
+
             if (cart.length === 0) {
                 container.innerHTML = '<div style="text-align:center; padding:40px 0;"><i class="fa fa-shopping-bag" style="font-size:40px; opacity:0.15;"></i><p style="color:var(--gray-400); margin-top:10px;">سلتك فارغة</p></div>';
-                document.getElementById('cartStepItems').style.display = 'block';
-                document.getElementById('cartStepCheckout').style.display = 'none';
-                document.getElementById('cartStepPayment').style.display = 'none';
                 const cartFooter = document.getElementById('cartStepItemsFooter');
-                if (cartFooter) cartFooter.style.display = '';
+                if (cartFooter) cartFooter.style.display = 'none';
                 recalculateCartTotals();
                 return;
             }
