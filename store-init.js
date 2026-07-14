@@ -261,7 +261,30 @@ window.StoreInit = {
   _hashRetries: 0,
 
   // ── Product Detail Page ────────────────────────────────────────────────────
+  _applyPriceToDetail(currency, originalPrice, wp) {
+    const c = document.querySelector('.product-price-large');
+    if (c) c.innerHTML = `<div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;"><span style="font-size:12px; color:#10b981; font-weight:800; background:#10b98118; padding:3px 8px; border-radius:6px; display:inline-flex; align-items:center; gap:4px; margin-bottom:4px;"><i class="fas fa-tags" style="font-size:10px;"></i> سعر الجملة للتاجر</span><div style="display:flex; align-items:baseline; gap:8px;"><span style="color:#10b981; font-size:32px; font-weight:900;">${currency}${wp.toFixed(2)}</span><span style="font-size:18px; font-weight:normal; color:var(--gray-400); text-decoration:line-through;">${currency}${originalPrice.toFixed(2)}</span></div></div>`;
+  },
+
+  _applyWholesaleToDetail() {
+    const pid = this._currentDetailProductId;
+    if (!pid || !window.wholesalePrices) return;
+    const wp = window.wholesalePrices[pid];
+    if (!wp || parseFloat(wp) <= 0) return;
+    const product = this.products.find(p => String(p.id) === String(pid));
+    if (!product) return;
+    const currency = this.settings.currency || '₪';
+    const promoPrice = this._getPromoPrice(product);
+    const hasPromo = promoPrice !== null && promoPrice < parseFloat(product.price);
+    const originalPrice = hasPromo ? parseFloat(product.price) : parseFloat(product.price);
+    const c = document.querySelector('.product-price-large');
+    if (c && !c.querySelector('.fa-tags')) {
+      this._applyPriceToDetail(currency, originalPrice, parseFloat(wp));
+    }
+  },
+
   _showProductDetail(productId) {
+    this._currentDetailProductId = productId;
     const product = this.products.find(p => String(p.id) === String(productId));
     if (!product) return;
 
@@ -285,26 +308,32 @@ window.StoreInit = {
     const isDistributor = isAdmin || (distPhone && distId);
     let wholesalePrice = null;
     if (isDistributor) {
-      if (product.wholesalePrice && parseFloat(product.wholesalePrice) > 0) {
-        wholesalePrice = parseFloat(product.wholesalePrice);
-      } else if (window.wholesalePrices && window.wholesalePrices[product.id]) {
+      if (window.wholesalePrices && window.wholesalePrices[product.id]) {
         wholesalePrice = parseFloat(window.wholesalePrices[product.id]);
+      } else if (product.wholesalePrice && parseFloat(product.wholesalePrice) > 0) {
+        wholesalePrice = parseFloat(product.wholesalePrice);
       }
     }
     if (!wholesalePrice && isDistributor) {
       DB.supabase.from('products').select('wholesale_price').eq('id', String(product.id)).single().then(({ data, error }) => {
         if (!error && data && data.wholesale_price !== null && parseFloat(data.wholesale_price) > 0) {
           const wp = parseFloat(data.wholesale_price);
-          displayOriginal = displayPrice;
-          displayPrice = wp;
-          const c = document.querySelector('.product-price-large');
-          if (c) c.innerHTML = `<div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;"><span style="font-size:12px; color:#10b981; font-weight:800; background:#10b98118; padding:3px 8px; border-radius:6px; display:inline-flex; align-items:center; gap:4px; margin-bottom:4px;"><i class="fas fa-tags" style="font-size:10px;"></i> سعر الجملة للتاجر</span><div style="display:flex; align-items:baseline; gap:8px;"><span style="color:#10b981; font-size:32px; font-weight:900;">${currency}${wp.toFixed(2)}</span><span style="font-size:18px; font-weight:normal; color:var(--gray-400); text-decoration:line-through;">${currency}${displayOriginal.toFixed(2)}</span></div></div>`;
+          this._applyPriceToDetail(currency, displayPrice, wp);
         }
       }).catch(() => {});
     }
     if (wholesalePrice) {
       displayOriginal = displayPrice;
       displayPrice = wholesalePrice;
+    }
+    // Safety net: re-check wholesalePrices after they may have loaded
+    if (isDistributor && !wholesalePrice) {
+      setTimeout(() => {
+        if (window.wholesalePrices && window.wholesalePrices[product.id]) {
+          const wp = parseFloat(window.wholesalePrices[product.id]);
+          if (wp > 0) this._applyPriceToDetail(currency, displayPrice, wp);
+        }
+      }, 1500);
     }
     const allImages = product.images && product.images.length > 0 ? product.images : [product.image];
 

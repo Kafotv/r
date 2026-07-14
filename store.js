@@ -1278,6 +1278,7 @@
                             });
                         }
                         window.wholesalePrices = pricesMap;
+                        if (typeof StoreInit._applyWholesaleToDetail === 'function') StoreInit._applyWholesaleToDetail();
                     }
                 }
                  if (pricesMap && Object.keys(pricesMap).length > 0) {
