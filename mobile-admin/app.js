@@ -59,6 +59,10 @@ const DB = (() => {
     async deleteOrder(id) {
       const { error } = await sb().from('orders').delete().eq('id', String(id));
       return !error;
+    },
+    async registerFCMToken(token, role = 'admin') {
+      const { error } = await sb().from('fcm_tokens').upsert({ token, role, created_at: new Date().toISOString() }, { onConflict: 'token' });
+      return !error;
     }
   };
 })();
@@ -181,6 +185,9 @@ function enterApp() {
   setupRealtime();
   const hashPage = location.hash.replace('#', '');
   if (['Dashboard','Orders','Products','Distributors','Settings'].includes(hashPage)) switchPage(hashPage);
+  if (state.isAdmin) {
+    initAdminFCM();
+  }
 }
 
 // ── Navigation ──
@@ -1281,3 +1288,38 @@ window.addEventListener('hashchange', () => {
   const hashPage = location.hash.replace('#', '');
   if (['Dashboard','Orders','Products','Distributors','Settings'].includes(hashPage) && hashPage !== state.currentPage) switchPage(hashPage);
 });
+
+// ─── FCM Admin Token Registration ───────────────────────────────────────
+async function initAdminFCM() {
+  try {
+    if (typeof firebase === 'undefined') return;
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpBVstbuy7-QWX2ZZXWInPrD4UUwG_JgY",
+      authDomain: "jomla-d4b6d.firebaseapp.com",
+      projectId: "jomla-d4b6d",
+      storageBucket: "jomla-d4b6d.firebasestorage.app",
+      messagingSenderId: "52673843388",
+      appId: "1:52673843388:web:29ac3a7a964045eef8c0b9"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    const messaging = firebase.messaging();
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      const swPath = window.location.pathname.includes('/r/') ? '/r/firebase-messaging-sw.js' : '/firebase-messaging-sw.js';
+      const scopePath = window.location.pathname.includes('/r/') ? '/r/firebase-cloud-messaging-push-scope' : '/firebase-cloud-messaging-push-scope';
+      const reg = await navigator.serviceWorker.register(swPath, { scope: scopePath });
+      const token = await messaging.getToken({ serviceWorkerRegistration: reg });
+      if (token) {
+        await DB.registerFCMToken(token, 'admin');
+        console.log('✅ Admin FCM Token Registered:', token.slice(0, 20) + '...');
+      }
+    }
+  } catch (e) {
+    console.error('FCM init failed:', e);
+  }
+}
