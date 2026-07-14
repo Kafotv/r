@@ -390,7 +390,8 @@ window.StoreInit = {
       }
     }
 
-    const currentCat = this.categories.find(c => String(c.id) === String(product.category)) || { name: 'عام', id: '0' };
+    const productCatId = product.category || (product.categories && product.categories[0]) || null;
+    const currentCat = this.categories.find(c => String(c.id) === String(productCatId)) || { name: 'عام', id: '0' };
 
     let initialMediaHTML = '';
     const firstItem = galleryItems[0];
@@ -423,7 +424,10 @@ window.StoreInit = {
 
     // Build related products HTML
     let relatedProductsHTML = '';
-    const relatedProducts = this.products.filter(p => String(p.category) === String(product.category) && String(p.id) !== String(product.id) && (!p.advanced || !p.advanced.hiddenProduct) && !this._isComingSoon(p)).slice(0, 6);
+    const relatedProducts = this.products.filter(p => {
+      const pCatId = p.category || (p.categories && p.categories[0]) || null;
+      return String(pCatId) === String(productCatId) && String(p.id) !== String(product.id) && (!p.advanced || !p.advanced.hiddenProduct) && !this._isComingSoon(p);
+    }).slice(0, 6);
     if (relatedProducts.length > 0) {
       relatedProductsHTML = `
         <div style="margin-top:60px;">

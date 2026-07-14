@@ -4495,26 +4495,65 @@
         }
 
         async function confirmDeleteProduct(id) {
-            showConfirm('هل أنت متأكد من رغبتك في حذف هذا المنتج نهائياً؟', async () => {
-                try {
+            const product = allProducts.find(p => p.id === id);
+            const isHidden = product?.advanced?.hiddenProduct;
+
+            const { isConfirmed, value } = await Swal.fire({
+                title: 'حذف المنتج',
+                html: `
+                    <div style="text-align:right; direction:rtl;">
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:15px; padding:10px; background:#f8fafc; border-radius:10px;">
+                            ${product?.image ? `<img src="${product.image}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;">` : '<div style="width:50px;height:50px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-image" style="color:#94a3b8;"></i></div>'}
+                            <div>
+                                <div style="font-weight:800; font-size:15px;">${product?.name || 'المنتج'}</div>
+                                <div style="font-size:12px; color:#64748b;">${product?.sku ? `SKU: ${product.sku}` : ''}</div>
+                            </div>
+                        </div>
+                        <div style="font-size:14px; font-weight:700; color:#475569; margin-bottom:8px;">ماذا تريد أن تفعل؟</div>
+                        <select id="deleteActionSelect" style="width:100%; padding:12px 15px; border-radius:12px; border:1.5px solid #e2e8f0; font-family:inherit; font-size:14px; font-weight:700;">
+                            <option value="hide">${isHidden ? 'إظهار المنتج (إلغاء الإخفاء)' : 'إخفاء المنتج (يبقى في قاعدة البيانات)'}</option>
+                            <option value="delete">حذف نهائي — لا يمكن التراجع</option>
+                        </select>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'تأكيد',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: isHidden ? '#10b981' : '#4f46e5',
+                preConfirm: () => document.getElementById('deleteActionSelect').value
+            });
+
+            if (!isConfirmed) return;
+
+            try {
+                if (value === 'hide') {
+                    // Toggle hidden status
+                    const p = allProducts.find(x => x.id === id);
+                    if (p) {
+                        if (!p.advanced) p.advanced = {};
+                        p.advanced.hiddenProduct = !p.advanced.hiddenProduct;
+                        await DB.saveProduct(p);
+                        showToast(p.advanced.hiddenProduct ? '🙈 تم إخفاء المنتج عن المتجر' : '👀 أصبح المنتج ظاهراً للجميع');
+                        initDashboard();
+                    }
+                } else {
                     const result = await DB.deleteProduct(id);
                     if (result) {
-                        showToast('🗑️ تم حذف المنتج بنجاح');
-                        // Reload products
+                        showToast('🗑️ تم حذف المنتج نهائياً');
                         initDashboard();
-                        // If we are in the editor with this product, clear it
                         if (document.getElementById('prod_id').value == id) {
                             openAddModal();
                         }
-                        // Remove row from table directly for instant feedback
-                        const row = document.querySelector(`button[onclick="confirmDeleteProduct('${id}')"]`)?.closest('tr');
+                        const row = document.querySelector(`button[onclick^="confirmDeleteProduct('${id}'"]`)?.closest('tr');
                         if (row) row.style.opacity = '0';
                         setTimeout(() => row?.remove(), 300);
                     }
-                } catch (e) {
-                    alert('حدث خطأ أثناء الحذف');
                 }
-            });
+            } catch (e) {
+                alert('حدث خطأ');
+                console.error(e);
+            }
         }
         let selectedCategoryIds = [];
 
@@ -10060,41 +10099,432 @@ async function handleJsonImport(event) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const products = JSON.parse(e.target.result);
-            if (!Array.isArray(products)) {
+            const imported = JSON.parse(e.target.result);
+            if (!Array.isArray(imported)) {
                 throw new Error('الملف يجب أن يحتوي على مصفوفة منتجات (Array).');
             }
 
-            const confirmResult = await Swal.fire({
-                title: 'تأكيد الاستيراد',
-                text: `هل أنت متأكد من استيراد ${products.length} منتج؟ سيتم تحديث المنتجات الموجودة مسبقاً (حسب ID أو SKU).`,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonText: 'نعم، استورد الآن',
-                cancelButtonText: 'إلغاء'
-            });
+            const existing = await DB.getProducts() || [];
+            const categories = await DB.getCategories() || [];
 
-            if (confirmResult.isConfirmed) {
-                Swal.fire({
-                    title: 'جاري الاستيراد...',
-                    allowOutsideClick: false,
-                    didOpen: () => { Swal.showLoading(); }
+            // Build keyword → category mapping for auto-categorization
+            // Arabic synonym map for common word variants
+            const arabicSynonymMap = {
+                'قلاده': ['قلادة', 'قلائد', 'سلسال', 'سنسال', 'سلاسل', 'قلاد', 'سلسل', 'شنبر', 'شنابر', 'سلسلة'],
+                'خاتم': ['خاتم', 'خواتم', 'خواتيم', 'خوتم', 'ختم'],
+                'ساعه': ['ساعة', 'ساعات', 'ساع', 'سويعات'],
+                'اسواره': ['اسوارة', 'أساور', 'إسوارة', 'إساور', 'سوار', 'سوارة', 'سواري', 'اساور', 'سوار'],
+                'سوار': ['اسوارة', 'أساور', 'إسوارة', 'إساور', 'سوار', 'سوارة', 'سواري', 'اساور', 'اسواره'],
+                'طقم': ['طقم', 'أطقم', 'اطقم', 'طواقم'],
+                'حلق': ['حلق', 'أحلاق', 'احلاق', 'حلاق', 'حلوق', 'حلقة', 'حلقات'],
+                'دبله': ['دبلة', 'دبل', 'دبيل', 'دبابيل'],
+                'عقد': ['عقد', 'عقود', 'عقاد'],
+                'بروش': ['بروش', 'أبروش', 'ابروش', 'بروشات'],
+                'محفظه': ['محفظة', 'محافظ'],
+                'نظاره': ['نظارة', 'نظارات', 'نضارة', 'نضارات'],
+                'حزام': ['حزام', 'أحزمة', 'احزمة', 'حزوم'],
+                'اكسسوار': ['اكسسوار', 'إكسسوار', 'اكسسوارات', 'إكسسوارات', 'كسسوار', 'اكسسوارات'],
+                'زينه': ['زينة', 'زينات', 'زينه'],
+                'لولو': ['لولو', 'لؤلؤ', 'لولؤ', 'مرجان', 'مرجانه', 'مرجانة'],
+                'ذهب': ['ذهب', 'ذهبية', 'ذهبي', 'مذهب', 'مطلية'],
+                'فضه': ['فضة', 'فضي', 'فضية', 'مفضض'],
+                'الماظ': ['الماظ', 'ألماظ', 'ألماس', 'الماس', 'ماس', 'ماظ', 'الماسة', 'ألماسة'],
+                'خرز': ['خرز', 'خرزة', 'خرزات'],
+                'شعر': ['شعر', 'شعرية', 'شعرية'],
+                'يد': ['يد', 'أيدي', 'ايدي', 'يدوية', 'يدوي'],
+                'رجل': ['رجل', 'أرجل', 'ارجل', 'رجال', 'رجالي', 'رجليه', 'رجلي'],
+                'اطفال': ['طفل', 'أطفال', 'اطفال', 'طفليه', 'طفلي', 'ولادي', 'بناتي', 'بيبي', 'ولاد', 'بنات'],
+                'نساء': ['نساء', 'نساي', 'نسائي', 'حريم', 'حريمي', 'حريميه', 'بنات', 'ستات'],
+                'رجال': ['رجال', 'رجالي', 'رجل'],
+            };
+
+            // Normalize Arabic characters: normalize alef variants, teh marbuta, etc.
+            function normAr(s) {
+                return s.replace(/[إأآا]/g, 'ا')
+                        .replace(/ة/g, 'ه')
+                        .replace(/ى/g, 'ي')
+                        .toLowerCase();
+            }
+
+            const catKeywords = {};
+            categories.forEach(c => {
+                const name = (c.name || '').trim();
+                if (!name) return;
+                const normalized = normAr(name);
+                const variants = new Set([normalized]);
+
+                // Generate singular/plural variants by common Arabic patterns
+                if (normalized.endsWith('ات')) variants.add(normalized.slice(0, -2) + 'ه');
+                if (normalized.endsWith('ه')) {
+                    variants.add(normalized.slice(0, -1) + 'ات');
+                    variants.add(normalized.slice(0, -1));
+                }
+                if (normalized.endsWith('ين')) variants.add(normalized.slice(0, -2));
+                if (normalized.endsWith('ون')) variants.add(normalized.slice(0, -2));
+
+                // Add synonym expansions from the map
+                const rootWords = [normalized];
+                // Also try each word in the category name as a seed
+                normalized.split(/[\s-]+/).forEach(w => {
+                    if (w.length >= 2) rootWords.push(w);
+                    // Look up in synonym map
+                    const syns = arabicSynonymMap[w];
+                    if (syns) syns.forEach(s => variants.add(normAr(s)));
                 });
 
-                const result = await DB.importProducts(products);
+                // Try each root word in the synonym map
+                rootWords.forEach(rw => {
+                    const syns = arabicSynonymMap[rw];
+                    if (syns) syns.forEach(s => variants.add(normAr(s)));
+                });
 
-                if (result) {
-                    await Swal.fire('تم بنجاح!', 'تم استيراد المنتجات بنجاح', 'success');
-                    window.location.reload();
-                } else {
-                    throw new Error(result.message);
+                variants.forEach(v => {
+                    if (v.length >= 2) catKeywords[v] = c;
+                });
+            });
+
+            const existingMap = {};
+            existing.forEach(p => {
+                existingMap[p.id] = p;
+                if (p.sku) existingMap[p.sku.toLowerCase()] = p;
+                if (p.name) existingMap[p.name.trim().toLowerCase()] = p;
+            });
+
+            // Build product list with status & default action + auto category
+            const productItems = imported.map(p => {
+                const matched = existingMap[p.id] || existingMap[p.sku?.toLowerCase()] || existingMap[p.name?.trim().toLowerCase()];
+                let status = 'new';
+                let matchName = '';
+                let matchId = null;
+                if (matched) {
+                    status = 'duplicate';
+                    matchName = matched.name;
+                    matchId = matched.id;
                 }
+
+                // Auto-assign category based on product name
+                let autoCategory = null;
+                const nameNorm = normAr(p.name || '');
+                for (const [kw, cat] of Object.entries(catKeywords)) {
+                    if (nameNorm.includes(kw)) {
+                        autoCategory = cat;
+                        break;
+                    }
+                }
+                if (autoCategory && !p.categories) p.categories = [];
+                if (autoCategory && !p.categories.includes(autoCategory.id)) {
+                    p.categories.push(autoCategory.id);
+                }
+
+                return {
+                    data: p,
+                    status,
+                    matchName,
+                    matchId,
+                    autoCategory: autoCategory?.name || null,
+                    // Runtime state (modified by user interactions)
+                    checked: true,
+                    action: status === 'new' ? 'import' : 'skip'
+                };
+            });
+
+            const containerId = 'importProductList';
+            const newCount = () => productItems.filter(x => x.status === 'new').length;
+            const dupCount = () => productItems.filter(x => x.status === 'duplicate').length;
+
+            function syncStateFromDOM() {
+                productItems.forEach((item, idx) => {
+                    const cb = document.querySelector(`input[name="check_${idx}"]`);
+                    if (cb) item.checked = cb.checked;
+                    const sel = document.querySelector(`select[name="action_${idx}"]`);
+                    if (sel) item.action = sel.value;
+                });
+            }
+
+            function syncStateToDOM() {
+                productItems.forEach((item, idx) => {
+                    const cb = document.querySelector(`input[name="check_${idx}"]`);
+                    if (cb) cb.checked = item.checked;
+                    const sel = document.querySelector(`select[name="action_${idx}"]`);
+                    if (sel) sel.value = item.action;
+                });
+                window._updateImportCount();
+            }
+
+            // Expose render function globally for Swal inline onclick handlers
+            window._renderImportList = function(filter) {
+                // Save current state before re-render
+                syncStateFromDOM();
+
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                let items = productItems;
+                if (filter === 'new') items = items.filter(x => x.status === 'new');
+                else if (filter === 'duplicate') items = items.filter(x => x.status === 'duplicate');
+
+                if (items.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8; font-size:14px;">لا توجد منتجات</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#f8fafc; border-bottom:2px solid #e2e8f0; position:sticky; top:0; z-index:2;">
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; font-weight:700; color:#475569;">
+                            <input type="checkbox" id="importSelectAll" onchange="window._toggleAllChecks(this)" style="width:16px;height:16px;cursor:pointer;accent-color:#4f46e5;"> تحديد الكل
+                        </label>
+                        <span id="importSelectedCount" style="font-size:11px; color:#94a3b8; margin-right:auto;">0 محدّد</span>
+                    </div>
+                ` + items.map((item, idx) => {
+                    const p = item.data;
+                    const isNew = item.status === 'new';
+                    const img = p.image || '';
+                    const price = parseFloat(p.price) || 0;
+                    const hasSale = p.salePrice && parseFloat(p.salePrice) > 0;
+                    const displayPrice = hasSale ? `<span style="text-decoration:line-through;color:#94a3b8;">${parseFloat(p.salePrice)}₪</span> ${price}₪` : `${price}₪`;
+
+                    const actionName = `action_${idx}`;
+                    const checkName = `check_${idx}`;
+                    const checkedAttr = item.checked ? 'checked' : '';
+                    const selectedAction = item.action;
+
+                    return `
+                        <div style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-bottom:1px solid #f1f5f9; transition:0.2s;" 
+                             onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor=''">
+                            <div style="flex-shrink:0;">
+                                <input type="checkbox" name="${checkName}" ${checkedAttr} onchange="window._updateImportCount();window._saveItemState(${idx},this.checked,document.querySelector('select[name=\\'action_${idx}\\']')?.value)" style="width:16px;height:16px;cursor:pointer;accent-color:#4f46e5;">
+                            </div>
+                            <div style="flex-shrink:0;">
+                                ${img ? `<img src="${img}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid #e2e8f0;">` 
+                                      : '<div style="width:44px;height:44px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-image" style="color:#94a3b8;"></i></div>'}
+                            </div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700; font-size:13px; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name || 'بدون اسم'}</div>
+                                <div style="font-size:11px; color:#64748b; margin-top:2px; display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+                                    ${p.sku ? `<span style="background:#f1f5f9; padding:1px 6px; border-radius:4px; font-weight:600;">SKU: ${p.sku}</span>` : ''}
+                                    <span style="font-weight:700; color:#4f46e5;">${displayPrice}</span>
+                                    ${item.autoCategory ? `<span style="background:#eef2ff; color:#4f46e5; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700;">🏷️ ${item.autoCategory}</span>` : ''}
+                                </div>
+                            </div>
+                            <div style="flex-shrink:0;">
+                                ${!isNew ? `<span style="font-size:10px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:20px; font-weight:700; white-space:nowrap;">مطابق: ${item.matchName}</span>` 
+                                          : '<span style="font-size:10px; background:#f0fdf4; color:#166534; padding:2px 8px; border-radius:20px; font-weight:700;">جديد</span>'}
+                            </div>
+                            <div style="flex-shrink:0;">
+                                <select name="${actionName}" onchange="window._saveItemState(${idx},document.querySelector('input[name=\\'check_${idx}\\']')?.checked,this.value)" style="padding:6px 10px; border-radius:8px; border:1.5px solid #e2e8f0; font-family:inherit; font-size:11px; font-weight:700; background:#fff; cursor:pointer;">
+                                    ${!isNew ? `
+                                        <option value="skip" ${selectedAction === 'skip' ? 'selected' : ''}>⏭️ تخطي</option>
+                                        <option value="replace" ${selectedAction === 'replace' ? 'selected' : ''}>🔄 استبدال الموجود</option>
+                                        <option value="delete_existing" ${selectedAction === 'delete_existing' ? 'selected' : ''}>🗑️ حذف الموجود + استيراد</option>
+                                    ` : `
+                                        <option value="import" ${selectedAction === 'import' ? 'selected' : ''}>✅ استيراد</option>
+                                        <option value="replace" ${selectedAction === 'replace' ? 'selected' : ''}>🔄 استبدال (مثل الاستيراد)</option>
+                                        <option value="skip" ${selectedAction === 'skip' ? 'selected' : ''}>⏭️ تخطي</option>
+                                    `}
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                window._updateImportCount();
+            };
+
+            window._toggleAllChecks = function(master) {
+                const checked = master.checked;
+                document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]').forEach(cb => {
+                    cb.checked = checked;
+                    const idx = parseInt(cb.name.replace('check_', ''));
+                    if (!isNaN(idx) && productItems[idx]) productItems[idx].checked = checked;
+                });
+                window._updateImportCount();
+            };
+
+            window._updateImportCount = function() {
+                const checked = document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]:checked').length;
+                const el = document.getElementById('importSelectedCount');
+                if (el) el.textContent = checked + ' محدّد';
+                const master = document.getElementById('importSelectAll');
+                if (master) {
+                    const total = document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]').length;
+                    master.checked = checked === total;
+                    master.indeterminate = checked > 0 && checked < total;
+                }
+            };
+
+            window._saveItemState = function(idx, checked, action) {
+                if (productItems[idx]) {
+                    productItems[idx].checked = checked;
+                    productItems[idx].action = action;
+                }
+            };
+
+            window._setAllImportActions = function(value) {
+                // First sync from DOM
+                syncStateFromDOM();
+                // Set all to the requested action
+                productItems.forEach(item => {
+                    item.action = value;
+                });
+                // Sync back to DOM
+                syncStateToDOM();
+            };
+
+            window._toggleAllChecks = function(master) {
+                document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]').forEach(cb => cb.checked = master.checked);
+                window._updateImportCount();
+            };
+
+            window._updateImportCount = function() {
+                const checked = document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]:checked').length;
+                const el = document.getElementById('importSelectedCount');
+                if (el) el.textContent = checked + ' محدّد';
+                const master = document.getElementById('importSelectAll');
+                if (master) {
+                    const total = document.querySelectorAll('#importProductList input[type="checkbox"][name^="check_"]').length;
+                    master.checked = checked === total;
+                    master.indeterminate = checked > 0 && checked < total;
+                }
+            };
+
+            window._setAllImportActions = function(value) {
+                document.querySelectorAll('#importProductList select').forEach(s => {
+                    // Check if the value exists as an option
+                    const hasOption = Array.from(s.options).some(o => o.value === value);
+                    if (hasOption) {
+                        s.value = value;
+                    } else {
+                        // Fallback: set to first available option
+                        s.value = s.options[0]?.value || 'import';
+                    }
+                });
+            };
+
+            window._filterImportList = function(el, filter) {
+                document.querySelectorAll('.import-filter-chip').forEach(c => c.classList.remove('active'));
+                el.classList.add('active');
+                window._renderImportList(filter);
+            };
+
+            const totalNew = newCount();
+            const totalDup = dupCount();
+
+            const html = `
+                <div style="text-align:right; direction:rtl; font-family:Tajawal,sans-serif;">
+                    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                        <button onclick="window._setAllImportActions('import')" 
+                                style="flex:1; padding:8px; border-radius:8px; border:1px solid #10b981; background:#f0fdf4; color:#166534; font-weight:700; font-size:12px; cursor:pointer; font-family:inherit;">
+                            ✅ استيراد الكل
+                        </button>
+                        <button onclick="window._setAllImportActions('replace')" 
+                                style="flex:1; padding:8px; border-radius:8px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; font-weight:700; font-size:12px; cursor:pointer; font-family:inherit;">
+                            🔄 استبدال الكل
+                        </button>
+                        <button onclick="window._setAllImportActions('skip')" 
+                                style="flex:1; padding:8px; border-radius:8px; border:1px solid #94a3b8; background:#f8fafc; color:#475569; font-weight:700; font-size:12px; cursor:pointer; font-family:inherit;">
+                            ⏭️ تخطي الكل
+                        </button>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span style="font-size:12px; font-weight:700; color:#475569; margin-left:6px;">تصفية:</span>
+                        <button class="import-filter-chip active" data-filter="all" onclick="window._filterImportList(this,'all')" 
+                                style="padding:4px 12px; border-radius:50px; border:1.5px solid #e2e8f0; background:#fff; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">
+                            الكل (${totalNew + totalDup})
+                        </button>
+                        <button class="import-filter-chip" data-filter="new" onclick="window._filterImportList(this,'new')" 
+                                style="padding:4px 12px; border-radius:50px; border:1.5px solid #e2e8f0; background:#fff; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">
+                            جديد (${totalNew})
+                        </button>
+                        <button class="import-filter-chip" data-filter="duplicate" onclick="window._filterImportList(this,'duplicate')" 
+                                style="padding:4px 12px; border-radius:50px; border:1.5px solid #e2e8f0; background:#fff; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">
+                            مطابق (${totalDup})
+                        </button>
+                    </div>
+                    <div id="${containerId}" style="max-height:400px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:12px;">
+                    </div>
+                </div>
+                <style>
+                    .import-filter-chip.active { background:#4f46e5 !important; color:#fff !important; border-color:#4f46e5 !important; }
+                </style>
+            `;
+
+            const { isConfirmed } = await Swal.fire({
+                title: '📦 معاينة الاستيراد — حدد المنتجات',
+                html,
+                showCancelButton: true,
+                confirmButtonText: 'بدء الاستيراد',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#4f46e5',
+                width: 800,
+                didOpen: () => {
+                    window._renderImportList('all');
+                }
+            });
+
+            // Cleanup global functions
+            delete window._renderImportList;
+            delete window._setAllImportActions;
+            delete window._filterImportList;
+            delete window._toggleAllChecks;
+            delete window._updateImportCount;
+            delete window._saveItemState;
+
+            if (!isConfirmed) return;
+
+            // Sync latest state from DOM before collecting
+            syncStateFromDOM();
+
+            Swal.fire({
+                title: 'جاري الاستيراد...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            // Collect actions — only from checked products
+            const toImport = [];
+            const toDeleteIds = [];
+
+            productItems.forEach((item, idx) => {
+                if (!item.checked) return;
+
+                const action = item.action;
+
+                if (action === 'import' || action === 'replace') {
+                    const p = { ...item.data };
+                    if (action === 'replace' && item.matchId) p.id = item.matchId;
+                    toImport.push(p);
+                } else if (action === 'delete_existing') {
+                    if (item.matchId) toDeleteIds.push(item.matchId);
+                    toImport.push(item.data);
+                }
+            });
+
+            // Delete marked products first
+            if (toDeleteIds.length > 0) {
+                for (const id of toDeleteIds) {
+                    await DB.deleteProduct(id);
+                }
+            }
+
+            if (toImport.length === 0) {
+                Swal.fire('لم يتم اختيار أي منتج', 'اختر منتجاً واحداً على الأقل للاستيراد', 'info');
+                return;
+            }
+
+            const result = await DB.importProducts(toImport);
+
+            if (result && result.success) {
+                let details = `✅ تم استيراد <strong>${result.count}</strong> منتج`;
+                if (toDeleteIds.length > 0) details += `<br>🗑️ تم حذف <strong>${toDeleteIds.length}</strong> منتج موجود`;
+                await Swal.fire({ icon: 'success', title: 'تم الاستيراد بنجاح', html: details, confirmButtonText: 'حسناً' });
+                window.location.reload();
+            } else {
+                const msg = result?.error || 'خطأ غير معروف';
+                throw new Error(msg);
             }
         } catch (err) {
             console.error('Import error:', err);
             Swal.fire('خطأ في الاستيراد', err.message, 'error');
         } finally {
-            event.target.value = ''; // Reset input
+            event.target.value = '';
         }
     };
     reader.readAsText(file);
@@ -10102,6 +10532,60 @@ async function handleJsonImport(event) {
 
 window.triggerJsonImport = triggerJsonImport;
 window.handleJsonImport = handleJsonImport;
+
+// ─── Export JSON ──────────────────────────────────────────
+async function exportProductsJson() {
+    try {
+        const products = await DB.getProducts();
+        if (!products || products.length === 0) {
+            Swal.fire('لا توجد منتجات', 'لا يوجد منتجات لتصديرها', 'info');
+            return;
+        }
+
+        const exportData = products.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            salePrice: p.salePrice || '',
+            wholesalePrice: p.wholesalePrice || '',
+            costPrice: p.costPrice || '',
+            stock: p.stock ?? '',
+            sku: p.sku || '',
+            image: p.image || '',
+            images: p.images || '',
+            category: p.category || '',
+            categories: p.categories || [],
+            variants: p.variants || '',
+            variantsData: p.variantsData || '',
+            advanced: p.advanced || {},
+            created_at: p.createdAt || p.created_at || new Date().toISOString()
+        }));
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `products_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'تم التصدير بنجاح',
+            text: `تم تصدير ${exportData.length} منتج`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error('Export error:', err);
+        Swal.fire('خطأ', 'حدث خطأ أثناء تصدير المنتجات', 'error');
+    }
+}
+
+window.exportProductsJson = exportProductsJson;
 
 // ─── Product Feed ──────────────────────────────────────────────
 function openProductFeedModal() {

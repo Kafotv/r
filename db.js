@@ -198,6 +198,14 @@ const DB = (() => {
     },
 
     async importProducts(products) {
+      const dbColumns = [
+        'id', 'name', 'price', 'sale_price', 'wholesale_price', 'cost_price',
+        'sku', 'image', 'images', 'description', 'categories', 'category',
+        'admin_note', 'fake_visitors', 'fake_stock', 'fake_timer',
+        'is_landing_page', 'landing_sections', 'variants', 'variants_data',
+        'advanced', 'created_at'
+      ];
+
       const rows = products.map(p => {
         const row = toRow(p, PRODUCT_MAP);
         row.id = String(row.id || Date.now());
@@ -207,6 +215,12 @@ const DB = (() => {
           delete row.comingSoonDate;
         }
         if (typeof row.advanced !== 'object') row.advanced = {};
+
+        // Filter to known columns only (same as saveProduct)
+        Object.keys(row).forEach(k => {
+          if (!dbColumns.includes(k)) delete row[k];
+        });
+
         ['price', 'sale_price', 'wholesale_price', 'cost_price'].forEach(col => {
           if (col in row) {
             const v = row[col];
@@ -216,8 +230,8 @@ const DB = (() => {
         return row;
       });
       const { error } = await sb().from('products').upsert(rows, { onConflict: 'id' });
-      if (error) { console.error('importProducts:', error); return false; }
-      return true;
+      if (error) { console.error('importProducts:', JSON.stringify(error)); return { success: false, error: error.message || error }; }
+      return { success: true, count: rows.length };
     },
 
     // ── Categories ────────────────────────────────────────────────────────
