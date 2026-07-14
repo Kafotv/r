@@ -646,12 +646,15 @@
                     if (couponCode) {
                         DB.incrementCouponUsage(couponCode).catch(() => {});
                     }
-                    // Fire-and-forget: notify admins via push
                     const pushUrl = CONFIG.PUSH_SERVER_URL;
                     if (pushUrl) {
+                      const headers = { 'Content-Type': 'application/json' };
+                      if (CONFIG.PUSH_SERVER_KEY) {
+                        headers['Authorization'] = 'Bearer ' + CONFIG.PUSH_SERVER_KEY;
+                      }
                       fetch(pushUrl + '/api/notify-order', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: headers,
                         body: JSON.stringify({
                           orderId: result,
                           total: finalTotalVal,

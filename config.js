@@ -19,6 +19,7 @@ const CONFIG = {
 
   // Push notification server (set this after deploying server.js)
   PUSH_SERVER_URL: 'https://r-p9ab.onrender.com', // e.g. 'https://your-app.onrender.com'
+  PUSH_SERVER_KEY: 'jomla_secret_push_key_2026',
 
   // Admin credentials are stored securely in Supabase settings table
   // Do NOT add passwords here — this file is public!
