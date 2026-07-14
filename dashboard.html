@@ -1554,7 +1554,7 @@
         .report-print-btn { padding:10px 20px; background:white; border:1px solid var(--border); border-radius:10px; font-weight:700; cursor:pointer; font-size:13px; transition:.15s; }
         .report-print-btn:hover { background:var(--primary); color:white; border-color:var(--primary); }
         @media(max-width:768px){ .report-grid-2 { grid-template-columns:1fr; } .report-cards { grid-template-columns:repeat(2,1fr); } }
-        @media print { .sidebar,.top-nav,.no-print,#ordersPagination,.panel-header div[style*="display:flex"] { display:none!important; } #tab-monthly { position:absolute; left:0; top:0; width:100%; } .report-card { box-shadow:none!important; border:1px solid #ddd; } }
+        @media print { .sidebar,.top-nav,.no-print,#ordersPagination,.panel-header div[style*="display:flex"] { display:none!important; } #tab-monthly, #tab-monthly *, #tab-performance, #tab-performance * { visibility:visible!important; } #tab-monthly { display:block!important; position:absolute; left:0; top:0; width:100%; } #tab-performance { display:block!important; position:absolute; left:0; top:0; width:100%; padding:20px; } .report-card { box-shadow:none!important; border:1px solid #ddd; } }
     </style>
 </head>
 
@@ -1573,6 +1573,9 @@
             </div>
             <div class="nav-item tab-link" data-target="tab-monthly">
                 <div class="nav-item-content"><i class="fas fa-calendar-alt main-icon"></i> التقرير الشهري</div>
+            </div>
+            <div class="nav-item tab-link" data-target="tab-performance">
+                <div class="nav-item-content"><i class="fas fa-rocket main-icon"></i> نظرة عامة على الأداء</div>
             </div>
 
             <div class="nav-dropdown">
@@ -2635,6 +2638,7 @@
                                     <th style="font-size:12px;">العميل</th>
                                     <th style="width:120px;font-size:12px;">العنوان</th>
                                     <th style="width:100px;font-size:12px;">المبلغ</th>
+                                    <th style="width:80px;font-size:12px;">الشحن</th>
                                     <th style="width:100px;font-size:12px;">حالة الطلب</th>
                                     <th style="width:80px;font-size:12px;">IP</th>
                                     <th style="width:70px;font-size:12px;">اكتمال</th>
@@ -5680,6 +5684,15 @@
                             <i class="fas fa-calendar-alt" style="font-size:48px;opacity:0.3;margin-bottom:15px;display:block;"></i>
                             <p style="font-weight:700;font-size:16px;">اختر الشهر لعرض التقرير</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-performance" class="tab-content">
+                <div id="performanceContent">
+                    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                        <i class="fas fa-spinner fa-spin" style="font-size:32px;opacity:0.5;display:block;margin-bottom:15px;"></i>
+                        <p style="font-weight:700;font-size:16px;">جاري تحميل نظرة الأداء...</p>
                     </div>
                 </div>
             </div>

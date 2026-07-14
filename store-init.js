@@ -281,7 +281,8 @@ window.StoreInit = {
     let displayOriginal = hasPromo ? parseFloat(product.price) : (hasSale ? parseFloat(product.salePrice) : 0);
     const distPhone = localStorage.getItem('distributorPhone');
     const distId = localStorage.getItem('distributorId');
-    const isDistributor = distPhone && distId;
+    const isAdmin = localStorage.getItem('admin_logged') === 'true';
+    const isDistributor = isAdmin || (distPhone && distId);
     let wholesalePrice = null;
     if (isDistributor) {
       if (window.wholesalePrices && window.wholesalePrices[product.id]) {
@@ -2558,8 +2559,8 @@ window.StoreInit = {
     let colors = p.colors ? p.colors.join(',') : '';
     let sizes = p.sizes ? p.sizes.join(',') : '';
     if (p.variants && Array.isArray(p.variants)) {
-      const colorVar = p.variants.find(v => v.name.includes('اللون') || v.type === 'swatch' || v.name.toLowerCase().includes('color'));
-      const sizeVar = p.variants.find(v => v.name.includes('المقاس') || v.type === 'pills' || v.name.toLowerCase().includes('size'));
+      const colorVar = p.variants.find(v => v.name.includes('اللون') || v.type === 'swatch' || v.type === 'image' || v.name.toLowerCase().includes('color'));
+      const sizeVar = p.variants.find(v => v.name.includes('المقاس') || v.type === 'pills' || v.name.toLowerCase().includes('size') || v.name.toLowerCase().includes('الحجم'));
       if (colorVar && colorVar.values) {
         colors = colorVar.values.map(v => (typeof v === 'object' ? v.value : v)).join(',');
       }
@@ -2631,8 +2632,10 @@ window.StoreInit = {
     let displayOriginal = hasPromo ? originalPrice : (p.salePrice && parseFloat(p.salePrice) > parseFloat(p.price) ? parseFloat(p.salePrice) : 0);
     const distPhone = localStorage.getItem('distributorPhone');
     const distId = localStorage.getItem('distributorId');
+    const isAdmin = localStorage.getItem('admin_logged') === 'true';
+    const showWholesale = isAdmin || (distPhone && distId);
     let wsPrice = null;
-    if (distPhone && distId) {
+    if (showWholesale) {
       if (window.wholesalePrices && window.wholesalePrices[p.id]) {
         wsPrice = parseFloat(window.wholesalePrices[p.id]);
       } else if (p.wholesalePrice && parseFloat(p.wholesalePrice) > 0) {
@@ -2756,7 +2759,16 @@ window.StoreInit = {
         const displayLimit = s.limit ? parseInt(s.limit) : totalCount;
         if (s.limit) list = list.slice(0, s.limit);
         const showLink = totalCount > displayLimit;
-        return list.length ? `<div style="margin:30px 0;">${renderHeaderRow(s.title || 'وصل حديثاً ✨', 'fas fa-clock', showLink ? 'all' : null)}${gridOf(list)}</div>` : '';
+        const uid = 'slider_' + (s.type + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,6));
+        return list.length ? `<div style="margin:30px 0;position:relative;">${renderHeaderRow(s.title || 'وصل حديثاً ✨', 'fas fa-clock', showLink ? 'all' : null)}
+          <div style="position:relative;">
+            <button onclick="var c=document.getElementById('${uid}'),w=c.querySelector('div');if(w){var gw=w.offsetWidth+12;c.scrollBy({left:gw,behavior:'smooth'})}" style="position:absolute;right:-6px;top:50%;transform:translateY(-50%);z-index:5;width:36px;height:36px;border-radius:50%;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:14px;" aria-label="التالي"><i class="fas fa-chevron-right"></i></button>
+            <button onclick="var c=document.getElementById('${uid}'),w=c.querySelector('div');if(w){var gw=w.offsetWidth+12;c.scrollBy({left:-gw,behavior:'smooth'})}" style="position:absolute;left:-6px;top:50%;transform:translateY(-50%);z-index:5;width:36px;height:36px;border-radius:50%;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:14px;" aria-label="السابق"><i class="fas fa-chevron-left"></i></button>
+            <div id="${uid}" style="display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:5px 4px 15px;-webkit-overflow-scrolling:touch;-ms-overflow-style:none;scrollbar-width:none;">
+              ${list.map(p => `<div style="min-width:165px;max-width:185px;flex-shrink:0;scroll-snap-align:start;">${this._productCardHTML(p)}</div>`).join('')}
+            </div>
+          </div>
+        </div>` : '';
       }
       case 'coming_soon': {
         let list = visibleProducts.filter(p => this._isComingSoon(p));
@@ -2791,7 +2803,38 @@ window.StoreInit = {
       }
       case 'winning_product': {
         const p = visibleProducts.find(x => String(x.id) === String(s.productId));
-        return p ? `<div style="margin:30px 0;">${renderHeaderRow(s.title || '🔥 المنتج الرابح', 'fas fa-trophy')}${gridOf([p])}</div>` : '';
+        if (!p) return '';
+        const currency = this.settings.currency || '₪';
+        const price = parseFloat(p.price) || 0;
+        const origPrice = p.salePrice && parseFloat(p.salePrice) > price ? parseFloat(p.salePrice) : 0;
+        const discount = origPrice > 0 ? Math.round((origPrice - price) / origPrice * 100) : 0;
+        const img = p.image || '';
+        return `
+          <div style="margin:30px 0;">
+            ${renderHeaderRow(s.title || '🔥 المنتج الرابح', 'fas fa-trophy')}
+            <div style="background:linear-gradient(135deg,#fff5f0,#fffaf5,#fefce8);border:2px solid #fbbf24;border-radius:20px;overflow:hidden;box-shadow:0 8px 25px rgba(251,191,36,0.15);position:relative;">
+              <div style="position:absolute;top:12px;right:12px;background:linear-gradient(135deg,#f59e0b,#eab308);color:#fff;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:900;display:flex;align-items:center;gap:5px;z-index:2;box-shadow:0 3px 10px rgba(245,158,11,0.3);">
+                <i class="fas fa-crown"></i> منتج الأسبوع
+              </div>
+              ${discount > 0 ? `<div style="position:absolute;top:12px;left:12px;background:#ef4444;color:#fff;padding:5px 10px;border-radius:20px;font-size:10px;font-weight:900;z-index:2;">خصم ${discount}%</div>` : ''}
+              <div style="display:flex;flex-direction:row-reverse;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;max-height:330px;overflow:hidden;">
+                  ${img ? `<img src="${img}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;display:block;">` : '<div style="height:100%;min-height:220px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;"><i class="fas fa-image" style="font-size:48px;color:var(--gray-400);"></i></div>'}
+                </div>
+                <div style="flex:1.2;min-width:240px;padding:24px;display:flex;flex-direction:column;justify-content:center;">
+                  <h3 style="font-size:20px;font-weight:900;margin:0 0 8px;line-height:1.3;color:#1e293b;">${p.name}</h3>
+                  ${s.desc ? `<p style="font-size:13px;color:#64748b;line-height:1.6;margin:0 0 12px;">${s.desc}</p>` : ''}
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                    <span style="font-size:24px;font-weight:900;color:#059669;">${currency}${price.toFixed(2)}</span>
+                    ${origPrice > 0 ? `<span style="font-size:14px;color:#94a3b8;text-decoration:line-through;">${currency}${origPrice.toFixed(2)}</span>` : ''}
+                  </div>
+                  <button onclick="event.stopPropagation(); ${this._getQAOnClick(p)}" style="align-self:flex-start;width:100%;padding:12px 20px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 12px rgba(5,150,105,0.25);">
+                    <i class="fas fa-shopping-bag"></i> أضف للسلة
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>`;
       }
       case 'video':
         if (!s.videoUrl) return '';

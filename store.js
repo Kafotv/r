@@ -128,18 +128,16 @@
             }
 
             const product = (window.StoreInit && StoreInit.products) ? StoreInit.products.find(p => String(p.id) === String(id)) : null;
-            const isOutOfStockVal = (keywords, val) => {
+            const isOutOfStockVal = (val) => {
                 if (!product || !product.variants) return false;
-                const v = product.variants.find(varObj => 
-                    keywords.some(kw => varObj.name.includes(kw) || varObj.name.toLowerCase().includes(kw))
-                );
-                if (!v || !v.values) return false;
-                
-                const rawValues = Array.isArray(v.values) ? v.values : (typeof v.values === 'string' ? (v.values.includes(',') ? v.values.split(',') : [v.values]) : []);
-                const values = rawValues.map(item => typeof item === 'object' && item !== null ? item : { value: item });
-                
-                const valObj = values.find(vo => (vo.value || '').trim() === val.trim());
-                return valObj && valObj.stock !== undefined && valObj.stock !== '' && parseInt(valObj.stock) === 0;
+                for (const varGroup of product.variants) {
+                    if (!varGroup.values) continue;
+                    const rawValues = Array.isArray(varGroup.values) ? varGroup.values : (typeof varGroup.values === 'string' ? (varGroup.values.includes(',') ? varGroup.values.split(',') : [varGroup.values]) : []);
+                    const values = rawValues.map(item => typeof item === 'object' && item !== null ? item : { value: item });
+                    const valObj = values.find(vo => (vo.value || '').trim() === val.trim());
+                    if (valObj && valObj.stock !== undefined && valObj.stock !== '' && parseInt(valObj.stock) === 0) return true;
+                }
+                return false;
             };
 
             let html = `<div style="text-align:center; margin-bottom:20px;">
@@ -152,7 +150,7 @@
                     <label style="display:block; font-weight:800; font-size:12px; margin-bottom:10px;">اختر اللون:</label>
                     <div style="display:flex; gap:10px; flex-wrap:wrap;" id="qaColors">
                         ${colors.map(c => {
-                            const oos = isOutOfStockVal(['اللون', 'color'], c);
+                            const oos = isOutOfStockVal(c);
                             return `<span class="option-pill ${oos ? 'out-of-stock' : ''}" ${oos ? 'style="opacity:0.4; cursor:not-allowed;"' : 'onclick="selectQAPill(this)"'} data-val="${c}">${c}${oos ? ' ✕' : ''}</span>`;
                         }).join('')}
                     </div>
@@ -164,7 +162,7 @@
                     <label style="display:block; font-weight:800; font-size:12px; margin-bottom:10px;">اختر المقاس:</label>
                     <div style="display:flex; gap:10px; flex-wrap:wrap;" id="qaSizes">
                         ${sizes.map(s => {
-                            const oos = isOutOfStockVal(['المقاس', 'size', 'الحجم'], s);
+                            const oos = isOutOfStockVal(s);
                             return `<span class="option-pill ${oos ? 'out-of-stock' : ''}" ${oos ? 'style="opacity:0.4; cursor:not-allowed;"' : 'onclick="selectQAPill(this)"'} data-val="${s}">${s}${oos ? ' ✕' : ''}</span>`;
                         }).join('')}
                     </div>
@@ -1251,20 +1249,19 @@
         async function checkDistributorSession(showDashboard = true) {
             console.log('🔍 checkDistributorSession fired. admin_logged:', localStorage.getItem('admin_logged'), 'distPhone:', localStorage.getItem('distributorPhone'), 'distId:', localStorage.getItem('distributorId'));
             updateProfileDropdown();
-            // Check admin session first
-            if (localStorage.getItem('admin_logged') === 'true') {
-                if (showDashboard) showAdminDashboard();
-                return;
-            }
+            const isAdmin = localStorage.getItem('admin_logged') === 'true';
             const phone = localStorage.getItem('distributorPhone');
             const id = localStorage.getItem('distributorId');
-            if (!phone || !id) return;
+            if (!isAdmin && (!phone || !id)) return;
             // Best-effort: apply wholesale prices if available (non-blocking, no UI change)
             try {
                 let pricesMap = window.wholesalePrices;
                 if (!pricesMap) {
-                    const { data: dist } = await DB.supabase.from('distributors').select('id, status').eq('id', id).single();
-                    if (dist && dist.status === 'approved') {
+                    if (isAdmin || (phone && id)) {
+                        if (!isAdmin) {
+                            const { data: dist } = await DB.supabase.from('distributors').select('id, status').eq('id', id).single();
+                            if (!dist || dist.status !== 'approved') return;
+                        }
                         pricesMap = {};
                         const { data: products } = await DB.supabase.from('products').select('id, wholesale_price');
                         (products || []).forEach(p => {
@@ -1272,12 +1269,14 @@
                                 pricesMap[p.id] = p.wholesale_price;
                             }
                         });
-                        const { data: wholesalePrices } = await DB.supabase.from('wholesale_prices').select('*').eq('phone', phone);
-                        (wholesalePrices || []).forEach(wp => {
-                            if (wp.wholesale_price !== undefined && wp.wholesale_price !== null && parseFloat(wp.wholesale_price) > 0) {
-                                pricesMap[wp.product_id] = wp.wholesale_price;
-                            }
-                        });
+                        if (phone) {
+                            const { data: wholesalePrices } = await DB.supabase.from('wholesale_prices').select('*').eq('phone', phone);
+                            (wholesalePrices || []).forEach(wp => {
+                                if (wp.wholesale_price !== undefined && wp.wholesale_price !== null && parseFloat(wp.wholesale_price) > 0) {
+                                    pricesMap[wp.product_id] = wp.wholesale_price;
+                                }
+                            });
+                        }
                         window.wholesalePrices = pricesMap;
                     }
                 }
@@ -1309,6 +1308,11 @@
                     });
                 }
             } catch(e) { console.warn('Wholesale price load skipped:', e.message); }
+            // Show admin dashboard if admin
+            if (isAdmin && showDashboard) {
+                showAdminDashboard();
+                return;
+            }
             // Only show the dashboard UI when explicitly requested
             if (!showDashboard) return;
             const section = document.getElementById('distDashboardSection');

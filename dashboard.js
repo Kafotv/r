@@ -96,6 +96,7 @@
             if (targetId === 'tab-products') renderProductsTable();
             if (targetId === 'tab-orders') renderOrdersTable();
             if (targetId === 'tab-monthly') loadMonthlyReport();
+            if (targetId === 'tab-performance') loadPerformanceOverview();
 
             if(updateUrl) {
                 const newUrl = new URL(window.location);
@@ -2537,7 +2538,7 @@
             if (!tbody) return;
 
             if (window.storeOrdersData === undefined) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الطلبات...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--gray-400);"><i class="fas fa-spinner fa-spin"></i> جاري تحميل الطلبات...</td></tr>';
                 DB.getOrders().then(orders => {
                     window.storeOrdersData = orders || [];
                     renderOrdersTable();
@@ -2550,7 +2551,7 @@
 
             const orders = window.storeOrdersData;
             if (!orders.length) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-400);">لا توجد طلبات بعد</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--gray-400);">لا توجد طلبات بعد</td></tr>';
                 document.getElementById('ordersPagination').style.display = 'none';
                 return;
             }
@@ -2571,6 +2572,8 @@
                 const address = cust.city || cust.address || '—';
                 const items = (o.items || []).map(i => `${i.name} x${i.quantity}`).join(', ');
                 const total = parseFloat(o.total || 0).toFixed(2);
+                const shipping = parseFloat(o.shipping_cost || o.shippingCost || 0).toFixed(2);
+                const productTotal = (parseFloat(o.total || 0) - parseFloat(o.shipping_cost || o.shippingCost || 0)).toFixed(2);
                 const status = o.status || 'جديد';
                 const date = new Date(o.date || o.createdAt).toLocaleDateString('ar-EG');
                 const ipCountry = o.ipCountry || o.ip_country || '—';
@@ -2593,7 +2596,8 @@
                             <div style="font-size:11px;color:#94a3b8;">${phone}</div>
                         </td>
                         <td style="font-size:12px;">${address}</td>
-                        <td dir="ltr" style="font-weight:700;color:var(--primary);">${total} ₪</td>
+                        <td dir="ltr" style="font-weight:700;color:var(--primary);">${total} ₪<div style="font-size:9px;color:#94a3b8;font-weight:400;">منتجات ${productTotal} ₪</div></td>
+                        <td dir="ltr" style="text-align:center;font-weight:600;color:#10b981;font-size:12px;">${shipping} ₪</td>
                         <td style="text-align:center;">
                             <span style="background:${sc.bg};color:${sc.color};border:1px solid ${sc.border};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;">${status}</span>
                         </td>
@@ -10665,6 +10669,7 @@ function printOrderInvoice() {
 
             function calcStats(ordList) {
                 const total = ordList.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+                const totalShipping = ordList.reduce((s, o) => s + (parseFloat(o.shipping_cost || o.shippingCost) || 0), 0);
                 const count = ordList.length;
                 const items = {};
                 let costTotal = 0;
@@ -10681,7 +10686,7 @@ function printOrderInvoice() {
                 });
                 const totalItems = Object.values(items).reduce((s, p) => s + p.qty, 0);
                 const top = Object.values(items).sort((a, b) => b.qty - a.qty);
-                return { total, count, totalItems, top, avg: count > 0 ? total / count : 0, costTotal, profit: total - costTotal };
+                return { total, totalShipping, count, totalItems, top, avg: count > 0 ? total / count : 0, costTotal, profit: total - costTotal };
             }
 
             const curStats = calcStats(orders.filter(o => filterMonth(o, y, m)));
@@ -10725,6 +10730,7 @@ function printOrderInvoice() {
                     <div class="report-cards">
                         <div class="report-card"><div class="report-card-label">إجمالي المبيعات</div><div class="report-card-value" style="color:var(--primary);">${curStats.total.toFixed(2)} ₪</div><div class="report-card-change ${chgClass(pctChange(curStats.total, prevStats.total))}">${chgIcon(pctChange(curStats.total, prevStats.total))} ${Math.abs(parseFloat(pctChange(curStats.total, prevStats.total)))}% عن السابق</div></div>
                         <div class="report-card"><div class="report-card-label">صافي الربح (تقديري)</div><div class="report-card-value" style="color:#10b981;">${Math.max(0, curStats.profit).toFixed(2)} ₪</div><div class="report-card-change" style="color:var(--text-muted);">${curStats.profit > 0 ? (curStats.profit / curStats.total * 100).toFixed(1) : 0}% هامش ربح</div></div>
+                        <div class="report-card"><div class="report-card-label">إيرادات الشحن</div><div class="report-card-value" style="color:#10b981;">${curStats.totalShipping.toFixed(2)} ₪</div><div class="report-card-change ${chgClass(pctChange(curStats.totalShipping, prevStats.totalShipping))}">${chgIcon(pctChange(curStats.totalShipping, prevStats.totalShipping))} ${Math.abs(parseFloat(pctChange(curStats.totalShipping, prevStats.totalShipping)))}% عن السابق</div></div>
                         <div class="report-card"><div class="report-card-label">عدد الطلبات</div><div class="report-card-value" style="color:var(--dark,#0f172a);">${curStats.count}</div><div class="report-card-change ${chgClass(pctChange(curStats.count, prevStats.count))}">${chgIcon(pctChange(curStats.count, prevStats.count))} ${Math.abs(parseFloat(pctChange(curStats.count, prevStats.count)))}% عن السابق</div></div>
                         <div class="report-card"><div class="report-card-label">متوسط الطلب</div><div class="report-card-value" style="color:#6366f1;">${curStats.avg.toFixed(2)} ₪</div><div class="report-card-change" style="color:var(--text-muted);">${prevStats.avg.toFixed(2)} ₪ الشهر الماضي</div></div>
                         <div class="report-card"><div class="report-card-label">منتجات مباعة</div><div class="report-card-value" style="color:#f59e0b;">${curStats.totalItems}</div><div class="report-card-change ${chgClass(pctChange(curStats.totalItems, prevStats.totalItems))}">${chgIcon(pctChange(curStats.totalItems, prevStats.totalItems))} ${Math.abs(parseFloat(pctChange(curStats.totalItems, prevStats.totalItems)))}% عن السابق</div></div>
@@ -10750,7 +10756,7 @@ function printOrderInvoice() {
                             <div class="report-panel-header"><i class="fas fa-history" style="color:var(--text-muted);"></i><h4>مقارنة مع ${monthNames[prevM - 1]} ${prevY}</h4></div>
                             <div style="padding:16px 20px;">
                                 <table class="report-table"><thead><tr><th>المؤشر</th><th style="text-align:center;">هذا الشهر</th><th style="text-align:center;">الشهر الماضي</th><th style="text-align:center;">التغير</th></tr></thead><tbody>
-                                    ${[{ label: 'إجمالي المبيعات', cur: curStats.total, prev: prevStats.total, unit: '₪', dec: 2 },{ label: 'عدد الطلبات', cur: curStats.count, prev: prevStats.count, unit: '', dec: 0 },{ label: 'منتجات مباعة', cur: curStats.totalItems, prev: prevStats.totalItems, unit: '', dec: 0 },{ label: 'متوسط الطلب', cur: curStats.avg, prev: prevStats.avg, unit: '₪', dec: 2 }].map(r => { const ch = pctChange(r.cur, r.prev); const isUp = parseFloat(ch) >= 0; return `<tr><td style="font-weight:700;">${r.label}</td><td style="text-align:center;font-weight:800;">${r.cur.toFixed(r.dec)} ${r.unit}</td><td style="text-align:center;color:var(--text-muted);">${r.prev.toFixed(r.dec)} ${r.unit}</td><td style="text-align:center;font-weight:800;color:${isUp ? '#10b981' : '#ef4444'};">${isUp ? '▲' : '▼'} ${Math.abs(parseFloat(ch))}%</td></tr>`; }).join('')}
+                                    ${[{ label: 'إجمالي المبيعات', cur: curStats.total, prev: prevStats.total, unit: '₪', dec: 2 },{ label: 'إيرادات الشحن', cur: curStats.totalShipping, prev: prevStats.totalShipping, unit: '₪', dec: 2 },{ label: 'عدد الطلبات', cur: curStats.count, prev: prevStats.count, unit: '', dec: 0 },{ label: 'منتجات مباعة', cur: curStats.totalItems, prev: prevStats.totalItems, unit: '', dec: 0 },{ label: 'متوسط الطلب', cur: curStats.avg, prev: prevStats.avg, unit: '₪', dec: 2 }].map(r => { const ch = pctChange(r.cur, r.prev); const isUp = parseFloat(ch) >= 0; return `<tr><td style="font-weight:700;">${r.label}</td><td style="text-align:center;font-weight:800;">${r.cur.toFixed(r.dec)} ${r.unit}</td><td style="text-align:center;color:var(--text-muted);">${r.prev.toFixed(r.dec)} ${r.unit}</td><td style="text-align:center;font-weight:800;color:${isUp ? '#10b981' : '#ef4444'};">${isUp ? '▲' : '▼'} ${Math.abs(parseFloat(ch))}%</td></tr>`; }).join('')}
                                 </tbody></table>
                             </div>
                         </div>
@@ -10759,7 +10765,9 @@ function printOrderInvoice() {
                             <div class="report-panel-header"><i class="fas fa-percentage" style="color:#10b981;"></i><h4>تحليل الأرباح</h4></div>
                             <div style="padding:16px 20px;">
                                 <div style="margin-bottom:16px;">
-                                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="font-weight:700;">الإيرادات</span><span style="font-weight:900;color:var(--primary);">${curStats.total.toFixed(2)} ₪</span></div>
+                                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="font-weight:700;">إيرادات المنتجات</span><span style="font-weight:900;color:var(--primary);">${(curStats.total - curStats.totalShipping).toFixed(2)} ₪</span></div>
+                                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="font-weight:700;">إيرادات الشحن</span><span style="font-weight:900;color:#10b981;">${curStats.totalShipping.toFixed(2)} ₪</span></div>
+                                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="font-weight:700;">الإجمالي</span><span style="font-weight:900;color:var(--primary);">${curStats.total.toFixed(2)} ₪</span></div>
                                     <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;"><span style="font-weight:700;">التكاليف (سعر الجملة)</span><span style="font-weight:900;color:#ef4444;">${curStats.costTotal.toFixed(2)} ₪</span></div>
                                     <div style="border-top:2px solid var(--border);padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;font-size:16px;"><span style="font-weight:900;">صافي الربح</span><span style="font-weight:900;color:#10b981;">${Math.max(0, curStats.profit).toFixed(2)} ₪</span></div>
                                 </div>
@@ -10780,6 +10788,237 @@ function printOrderInvoice() {
 
         function printMonthlyReport() {
             window.print();
+        }
+
+        async function loadPerformanceOverview() {
+            const container = document.getElementById('performanceContent');
+            if (!container) return;
+
+            container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted);"><i class="fas fa-spinner fa-spin" style="font-size:32px;opacity:0.5;display:block;margin-bottom:15px;"></i><p style="font-weight:700;font-size:16px;">جاري تحميل نظرة الأداء...</p></div>';
+
+            if (!window.storeOrdersData) {
+                try {
+                    const orders = await DB.getOrders();
+                    window.storeOrdersData = orders || [];
+                } catch(e) {
+                    window.storeOrdersData = [];
+                }
+            }
+            const allOrders = window.storeOrdersData || [];
+
+            // Get available years
+            const yearsSet = new Set();
+            allOrders.forEach(o => {
+                const d = new Date(o.date || o.createdAt);
+                if (!isNaN(d.getTime())) yearsSet.add(d.getFullYear());
+            });
+            const years = [...yearsSet].sort((a, b) => b - a);
+            const selectedYear = window._perfYear || (years[0] || new Date().getFullYear());
+            const orders = allOrders.filter(o => {
+                const d = new Date(o.date || o.createdAt);
+                return !isNaN(d.getTime()) && d.getFullYear() === selectedYear;
+            });
+
+            const monthNames = ['يناير','فبراير','مارس','إبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+            const monthlyMap = {};
+            let totalRevenue = 0, totalShipping = 0, totalOrders = 0, totalItems = 0, totalProfit = 0;
+            const allItemsMap = {};
+            const statusCount = {};
+
+            orders.forEach(o => {
+                const d = new Date(o.date || o.createdAt);
+                if (isNaN(d.getTime())) return;
+                const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                if (!monthlyMap[key]) monthlyMap[key] = { revenue: 0, shipping: 0, count: 0, items: 0, label: monthNames[d.getMonth()] + ' ' + d.getFullYear() };
+                const rev = parseFloat(o.total) || 0;
+                const ship = parseFloat(o.shipping_cost || o.shippingCost) || 0;
+                monthlyMap[key].revenue += rev;
+                monthlyMap[key].shipping += ship;
+                monthlyMap[key].count++;
+                totalRevenue += rev;
+                totalShipping += ship;
+                totalOrders++;
+
+                const st = o.status || 'جديد';
+                statusCount[st] = (statusCount[st] || 0) + 1;
+
+                (o.items || []).forEach(item => {
+                    const q = parseInt(item.quantity) || 1;
+                    const id = item.id || item.productId || item.name || 'unknown';
+                    if (!allItemsMap[id]) allItemsMap[id] = { name: item.name || 'منتج', qty: 0, rev: 0 };
+                    allItemsMap[id].qty += q;
+                    allItemsMap[id].rev += (parseFloat(item.price) || 0) * q;
+                    totalItems += q;
+                });
+            });
+
+            const months = Object.keys(monthlyMap).sort();
+            const productRevenue = totalRevenue - totalShipping;
+            const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            const shipPercent = totalRevenue > 0 ? (totalShipping / totalRevenue * 100) : 0;
+            const avgShipping = totalOrders > 0 ? totalShipping / totalOrders : 0;
+            const topItems = Object.values(allItemsMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+
+            const maxRev = Math.max(...months.map(m => monthlyMap[m].revenue), 1);
+            let chartHTML = '';
+            months.forEach(m => {
+                const d = monthlyMap[m];
+                const pct = (d.revenue / maxRev * 100);
+                const shipBarPct = d.shipping > 0 ? (d.shipping / maxRev * 100) : 0;
+                chartHTML += `
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;">
+                        <span style="min-width:70px;font-weight:700;color:var(--text-muted);">${d.label}</span>
+                        <div style="flex:1;display:flex;align-items:center;gap:2px;height:24px;border-radius:6px;overflow:hidden;background:#f1f5f9;">
+                            <div style="height:100%;width:${pct}%;background:var(--primary);border-radius:4px;transition:width 0.3s;"></div>
+                            ${d.shipping > 0 ? `<div style="height:100%;width:${shipBarPct}%;background:#10b981;border-radius:4px;"></div>` : ''}
+                        </div>
+                        <span style="min-width:80px;text-align:right;font-weight:800;font-size:11px;">${d.revenue.toFixed(0)} ₪</span>
+                    </div>`;
+            });
+
+            const topProductsHTML = topItems.map((p, i) => `
+                <tr>
+                    <td style="padding:8px 12px;font-weight:800;color:${i < 3 ? ['#f59e0b','#94a3b8','#cd7f32'][i] : 'var(--text-muted)'};">#${i+1}</td>
+                    <td style="padding:8px 12px;font-weight:700;">${p.name}</td>
+                    <td style="padding:8px 12px;text-align:center;font-weight:800;">${p.qty}</td>
+                    <td style="padding:8px 12px;text-align:center;font-weight:800;color:var(--primary);">${p.rev.toFixed(2)} ₪</td>
+                </tr>
+            `).join('');
+
+            const statusColors = { 'مكتمل': '#10b981', 'جديد': '#f59e0b', 'قيد التوصيل': '#3b82f6', 'ملغي': '#ef4444', 'قيد المراجعة': '#8b5cf6', 'تم الشحن': '#06b6d4', 'تم الارجاع': '#f97316' };
+            const totalStatus = Object.values(statusCount).reduce((s, c) => s + c, 0);
+            let statusBars = '', statusIdx = 0;
+            Object.entries(statusCount).forEach(([st, cnt]) => {
+                const pct = (cnt / totalStatus * 100);
+                const color = statusColors[st] || '#94a3b8';
+                statusBars += `
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:${statusIdx < Object.keys(statusCount).length - 1 ? '1px solid #f1f5f9' : 'none'};">
+                        <span style="width:10px;height:10px;border-radius:3px;background:${color};flex-shrink:0;"></span>
+                        <span style="flex:1;font-weight:700;font-size:12px;">${st}</span>
+                        <span style="font-weight:800;font-size:13px;">${cnt}</span>
+                        <span style="font-size:11px;color:var(--text-muted);min-width:45px;text-align:left;">${pct.toFixed(1)}%</span>
+                        <div style="width:60px;height:6px;border-radius:3px;background:#f1f5f9;overflow:hidden;">
+                            <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;"></div>
+                        </div>
+                    </div>`;
+                statusIdx++;
+            });
+
+            const perfOnChange = `window._perfYear=parseInt(this.value);loadPerformanceOverview()`;
+            const yearOptions = years.map(y => `<option value="${y}" ${y === selectedYear ? 'selected' : ''}>${y}</option>`).join('');
+
+            container.innerHTML = `
+                <div class="panel" style="margin-bottom:0;border:none;">
+                    <div style="padding:30px 30px 20px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;flex-wrap:wrap;gap:15px;">
+                            <div>
+                                <h2 style="font-size:22px;font-weight:900;margin:0 0 5px;color:var(--dark);display:flex;align-items:center;gap:10px;"><i class="fas fa-rocket" style="color:var(--primary);"></i> نظرة عامة على الأداء</h2>
+                                <p style="color:var(--text-muted);font-size:13px;margin:0;">${selectedYear} — ${totalOrders} طلب — ${totalRevenue.toFixed(2)} ₪ إجمالي الإيرادات (منتجات ${productRevenue.toFixed(2)} ₪ + شحن ${totalShipping.toFixed(2)} ₪)</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center;">
+                                <select onchange="${perfOnChange}" style="padding:8px 14px;border-radius:10px;border:1.5px solid var(--border);font-weight:700;font-size:13px;outline:none;background:var(--white);cursor:pointer;">
+                                    ${yearOptions}
+                                </select>
+                                <button onclick="window.print()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--white);color:var(--text-main);font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;" class="no-print"><i class="fas fa-print"></i> طباعة</button>
+                            </div>
+                        </div>
+
+                        <div class="report-cards" style="margin-bottom:30px;">
+                            <div class="report-card"><div class="report-card-label">إجمالي الإيرادات</div><div class="report-card-value" style="color:var(--primary);">${totalRevenue.toFixed(2)} ₪</div><div class="report-card-change" style="color:var(--text-muted);">${productRevenue.toFixed(2)} ₪ منتجات + ${totalShipping.toFixed(2)} ₪ شحن</div></div>
+                            <div class="report-card"><div class="report-card-label">إيرادات الشحن</div><div class="report-card-value" style="color:#10b981;">${totalShipping.toFixed(2)} ₪</div><div class="report-card-change" style="color:var(--text-muted);">${shipPercent.toFixed(1)}% من الإيرادات — بمتوسط ${avgShipping.toFixed(2)} ₪/طلب</div></div>
+                            <div class="report-card"><div class="report-card-label">عدد الطلبات</div><div class="report-card-value" style="color:var(--dark);">${totalOrders}</div><div class="report-card-change" style="color:var(--text-muted);">${totalItems} منتج مباع</div></div>
+                            <div class="report-card"><div class="report-card-label">متوسط قيمة الطلب</div><div class="report-card-value" style="color:#6366f1;">${avgOrder.toFixed(2)} ₪</div><div class="report-card-change" style="color:var(--text-muted);">بما في ذلك الشحن</div></div>
+                        </div>
+
+                        <div class="report-grid-2">
+                            <div class="report-panel">
+                                <div class="report-panel-header"><i class="fas fa-chart-bar" style="color:var(--primary);"></i><h4>الإيرادات الشهرية</h4></div>
+                                <div style="padding:16px 20px;">
+                                    <div style="display:flex;gap:16px;margin-bottom:16px;font-size:11px;font-weight:700;">
+                                        <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--primary);"></span> إيرادات المنتجات</span>
+                                        <span style="display:flex;align-items:center;gap:4px;"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#10b981;"></span> إيرادات الشحن</span>
+                                    </div>
+                                    ${months.length > 0 ? chartHTML : '<div style="text-align:center;padding:40px;color:var(--text-muted);">لا توجد بيانات لهذه السنة</div>'}
+                                </div>
+                            </div>
+
+                            <div class="report-panel">
+                                <div class="report-panel-header"><i class="fas fa-crown" style="color:#f59e0b;"></i><h4>الأكثر مبيعاً</h4></div>
+                                ${topItems.length > 0 ? `
+                                <div style="padding:0 20px 16px;overflow-x:auto;">
+                                    <table class="report-table"><thead><tr><th>#</th><th>المنتج</th><th style="text-align:center;">الكمية</th><th style="text-align:center;">الإيراد</th></tr></thead><tbody>${topProductsHTML}</tbody></table>
+                                </div>` : '<div style="text-align:center;padding:40px;color:var(--text-muted);">لا توجد مبيعات بعد</div>'}
+                            </div>
+                        </div>
+
+                        <div class="report-grid-2" style="margin-top:24px;">
+                            <div class="report-panel">
+                                <div class="report-panel-header"><i class="fas fa-truck" style="color:#10b981;"></i><h4>تحليل الشحن</h4></div>
+                                <div style="padding:20px;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+                                        <span style="font-weight:700;font-size:13px;">إجمالي إيرادات الشحن</span>
+                                        <span style="font-weight:900;font-size:16px;color:#10b981;">${totalShipping.toFixed(2)} ₪</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+                                        <span style="font-weight:700;font-size:13px;">متوسط الشحن لكل طلب</span>
+                                        <span style="font-weight:900;font-size:16px;color:var(--dark);">${avgShipping.toFixed(2)} ₪</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+                                        <span style="font-weight:700;font-size:13px;">نسبة الشحن من الإيرادات</span>
+                                        <span style="font-weight:900;font-size:16px;color:var(--primary);">${shipPercent.toFixed(1)}%</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+                                        <span style="font-weight:700;font-size:13px;">صافي إيرادات المنتجات</span>
+                                        <span style="font-weight:900;font-size:18px;color:var(--dark);">${productRevenue.toFixed(2)} ₪</span>
+                                    </div>
+                                    <div style="margin-top:16px;background:#f8fafc;border-radius:10px;padding:16px;">
+                                        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
+                                            <span style="font-weight:700;">توزيع الإيرادات</span>
+                                            <span style="font-weight:800;">منتجات ${(100 - shipPercent).toFixed(1)}% / شحن ${shipPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <div style="height:10px;border-radius:6px;background:#f1f5f9;overflow:hidden;display:flex;">
+                                            <div style="height:100%;width:${100 - shipPercent}%;background:var(--primary);border-radius:6px 0 0 6px;"></div>
+                                            <div style="height:100%;width:${shipPercent}%;background:#10b981;border-radius:0 6px 6px 0;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="report-panel">
+                                <div class="report-panel-header"><i class="fas fa-chart-pie" style="color:#8b5cf6;"></i><h4>حالة الطلبات</h4></div>
+                                <div style="padding:20px;">
+                                    ${Object.keys(statusCount).length > 0 ? statusBars : '<div style="text-align:center;padding:20px;color:var(--text-muted);">لا توجد طلبات</div>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:24px;">
+                            <div class="report-panel">
+                                <div class="report-panel-header"><i class="fas fa-chart-line" style="color:#6366f1;"></i><h4>ملخص سريع</h4></div>
+                                <div style="padding:20px;">
+                                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                                        ${[
+                                            { label: 'إجمالي الطلبات', val: totalOrders, color: 'var(--primary)', icon: 'fa-shopping-bag' },
+                                            { label: 'إجمالي المنتجات المباعة', val: totalItems, color: '#f59e0b', icon: 'fa-boxes' },
+                                            { label: 'متوسط الإيرادات الشهري', val: months.length > 0 ? (totalRevenue / months.length).toFixed(2) + ' ₪' : '0 ₪', color: '#6366f1', icon: 'fa-calendar' },
+                                            { label: 'متوسط الشحن الشهري', val: months.length > 0 ? (totalShipping / months.length).toFixed(2) + ' ₪' : '0 ₪', color: '#10b981', icon: 'fa-truck' },
+                                            { label: 'متوسط الطلبات الشهري', val: months.length > 0 ? Math.round(totalOrders / months.length) : 0, color: '#f97316', icon: 'fa-shopping-cart' },
+                                            { label: 'نسبة الشحن', val: shipPercent.toFixed(1) + '%', color: '#06b6d4', icon: 'fa-percentage' },
+                                        ].map(s => `
+                                            <div style="flex:1;min-width:100px;background:#f8fafc;border-radius:12px;padding:16px;text-align:center;">
+                                                <i class="fas ${s.icon}" style="color:${s.color};font-size:20px;margin-bottom:8px;opacity:0.7;"></i>
+                                                <div style="font-weight:900;font-size:20px;color:${s.color};">${s.val}</div>
+                                                <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-top:4px;">${s.label}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
 window.addNewPopupCampaign = addNewPopupCampaign;
