@@ -1292,6 +1292,15 @@ window.addEventListener('hashchange', () => {
 // ─── FCM Admin Token Registration ───────────────────────────────────────
 async function initAdminFCM() {
   try {
+    // If running in Cordova, but plugins are not loaded yet, wait for deviceready
+    if (window.cordova && !window.FirebasePlugin) {
+      console.log('📱 Cordova detected but FirebasePlugin not ready. Waiting for deviceready...');
+      document.addEventListener('deviceready', () => {
+        initAdminFCM();
+      }, { once: true });
+      return;
+    }
+
     // 1. If running inside Cordova app:
     if (window.cordova && window.FirebasePlugin) {
       console.log('📱 Cordova environment detected. Initializing native FCM...');
