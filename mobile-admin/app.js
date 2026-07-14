@@ -1323,6 +1323,21 @@ async function initAdminFCM() {
           }, (err) => {
             console.error('Failed to get native FCM token:', err);
           });
+
+          // Create custom channel for notifications with custom sound
+          window.FirebasePlugin.createChannel({
+            id: "orders_channel_v3",
+            name: "طلبات جديدة",
+            sound: "mane",
+            importance: 4,
+            vibration: true,
+            light: true,
+            lightColor: "0xFFFF0000"
+          }, () => {
+            console.log("✅ Created custom notification channel: orders_channel_v3");
+          }, (err) => {
+            console.error("Failed to create notification channel:", err);
+          });
           
           window.FirebasePlugin.onMessageReceived((message) => {
             console.log('Native message received:', message);

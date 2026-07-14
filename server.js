@@ -85,7 +85,7 @@ app.post('/api/notify-order', auth, async (req, res) => {
       android: {
         notification: {
           sound: 'mane',
-          channelId: 'orders_channel_v2', // unique channel to force sound binding
+          channelId: 'orders_channel_v3', // unique channel to force sound binding
         }
       },
       data: {
